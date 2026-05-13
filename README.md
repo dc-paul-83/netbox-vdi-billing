@@ -1,96 +1,165 @@
 # netbox-vdi-billing
 
-NetBox 4.x Plugin für kostenstellen-basierte VDI-Abrechnung mit automatischer Preisberechnung aus VM-Ressourcen.
+NetBox 4.5.x Plugin für kostenstellen-basierte VDI-Abrechnung.  
+Berechnet automatisch monatliche Kosten aus VM-Ressourcen (vCPU, RAM, GPU) und gruppiert sie nach Kostenstellen für den internen Chargeback.
 
-## Features
+---
 
-- **Kostenstellen-Übersicht** – gruppierte Tabelle mit Monat-/Jahreskosten je Kostenstelle
-- **Preisprofile** – flexible Kalkulation: Grundpreis + €/vCPU + €/GB RAM + GPU-Aufschlag
-- **Festpreis-Override** – manuelle Überschreibung pro VM möglich
-- **PDF/Druckansicht** – sauber formatierter Chargeback-Report pro Kostenstelle
-- **VM-Detailpanel** – Abrechnungsinfos direkt auf der NetBox VM-Seite
+## So funktioniert das Plugin
 
-## Installation
-
-### 1. Plugin ins NetBox-Verzeichnis kopieren (oder per pip installieren)
-
-```bash
-# Im NetBox-Verzeichnis
-cd /opt/netbox
-source venv/bin/activate
-
-# Entwicklungsinstallation (aus dem Plugin-Verzeichnis)
-pip install -e /pfad/zu/netbox-vdi-billing
-
-# Oder direkt aus dem Repo-Unterverzeichnis
-pip install -e /opt/free-inventory/netbox-vdi-billing
-```
-
-### 2. `configuration.py` anpassen
-
-```python
-PLUGINS = [
-    'netbox_vdi_billing',
-]
-
-# Optional: Plugin-Einstellungen
-PLUGINS_CONFIG = {
-    'netbox_vdi_billing': {},
-}
-```
-
-### 3. Migrationen ausführen
-
-```bash
-cd /opt/netbox
-python manage.py migrate netbox_vdi_billing
-python manage.py collectstatic --no-input
-```
-
-### 4. NetBox neu starten
-
-```bash
-sudo systemctl restart netbox netbox-rq
-```
-
-## Optional: PDF-Export mit reportlab
-
-```bash
-pip install reportlab
-```
-
-Ohne reportlab öffnet der PDF-Button eine druckoptimierte HTML-Seite (Browser → Drucken → Als PDF speichern).
-
-## Einrichtung
-
-1. **Preisprofile anlegen** unter *VDI Abrechnung → Preisprofile → Hinzufügen*  
-   Beispiel: `Standard VDI` mit `base_price=10, vcpu_price=2, ram_price_per_gb=0.5`
-
-2. **VMs zuordnen** unter *VDI Abrechnung → Alle Zuordnungen → Hinzufügen*  
-   VM auswählen, Kostenstelle/Abteilung/Profil eintragen
-
-3. **Übersicht ansehen** unter *VDI Abrechnung → Kostenstellen-Übersicht*
-
-## Datenmodell
+Das Plugin besteht aus zwei Bausteinen, die zusammenspielen:
 
 ```
-VDIBillingProfile         VDIAssignment
-─────────────────         ────────────────────────────
-name                      virtual_machine (→ VM)
-base_price                profile (→ VDIBillingProfile)
-vcpu_price                cost_center
-ram_price_per_gb          department
-gpu_surcharge             assigned_to
-description               cost_override  (nullable)
-                          notes
-
-cost_monthly = cost_override ?? profile.calculate_cost(vm) ?? 0
+Preisprofil  +  VM-Zuordnung  =  Kostenstellen-Abrechnung
+──────────────────────────────────────────────────────────
+"Standard VDI"    VM "VDESK-042"    Kostenstelle 11554
+€2/vCPU        →  4 vCPU            Abteilung: IT
+€0,50/GB RAM      8 GB RAM          Zugewiesen an: M. Müller
+                  ─────────         Berechnet: 12,00 €/Monat
+                  4×2 + 8×0,5 = 12
 ```
+
+### Schritt 1 — Preisprofile anlegen
+
+**VDI Abrechnung → Preisprofile → Hinzufügen**
+
+Ein Profil definiert die Preisregeln für eine VDI-Klasse:
+
+| Feld | Beschreibung | Beispiel |
+|---|---|---|
+| **Name** | Bezeichnung des Profils | `Standard VDI` |
+| **Grundpreis** | Fixer Betrag pro VM/Monat, unabhängig von Ressourcen | `10,00 €` |
+| **Preis pro vCPU** | Wird mit der vCPU-Anzahl der VM multipliziert | `2,00 €` |
+| **Preis pro GB RAM** | Wird mit dem RAM der VM (in GB) multipliziert | `0,50 €` |
+| **GPU-Aufschlag** | Wird addiert, wenn das Custom Field `gpu` der VM gesetzt ist | `80,00 €` |
+
+**Beispiel-Kalkulation** für eine VM mit 4 vCPU, 16 GB RAM, ohne GPU:
+```
+Grundpreis:     10,00 €
+4 × 2,00 €:      8,00 €
+16 × 0,50 €:     8,00 €
+──────────────────────
+Gesamt:         26,00 €/Monat
+```
+
+**Typische Profile:**
+
+| Profil | Grundpreis | €/vCPU | €/GB RAM | GPU |
+|---|---|---|---|---|
+| Standard VDI | 5 € | 2 € | 0,50 € | 0 € |
+| Persistent VDI | 10 € | 3 € | 0,75 € | 0 € |
+| GPU-Workstation | 15 € | 4 € | 1,00 € | 80 € |
+
+> **Kein Profil nötig?** Wenn eine VM einen fixen Vertragspreis hat, kann man auch direkt einen **Festpreis** eintragen (überschreibt die Profilberechnung).
+
+---
+
+### Schritt 2 — VMs zuordnen
+
+**VDI Abrechnung → Alle Zuordnungen → Hinzufügen**
+
+Für jede abzurechnende VM eine Zuordnung anlegen:
+
+| Feld | Beschreibung | Pflicht |
+|---|---|---|
+| **Virtuelle Maschine** | Die NetBox-VM aus der Dropdown-Liste | ✅ |
+| **Preisprofil** | Welches Profil zur Berechnung genutzt werden soll | – |
+| **Kostenstelle** | Nummer der Kostenstelle (z.B. `11554`) | – |
+| **Abteilung** | Name der Abteilung (z.B. `IT-Infrastruktur`) | – |
+| **Zugewiesen an** | Benutzername oder Team | – |
+| **Festpreis** | Fixer €/Monat-Wert — überschreibt Profilberechnung | – |
+| **Notizen** | Interne Anmerkungen | – |
+
+> ⚠️ **Kostenstelle ohne Profil und ohne Festpreis** → Kosten = 0 €.  
+> Mindestens eines von beidem sollte gesetzt sein.
+
+**Preisquelle-Logik (Priorität):**
+```
+1. Festpreis gesetzt?  → Festpreis wird verwendet
+2. Profil gesetzt?     → Grundpreis + vCPU × Preis + RAM × Preis (+ GPU)
+3. Nichts gesetzt?     → 0,00 €
+```
+
+---
+
+### Schritt 3 — Übersicht & Chargeback
+
+**VDI Abrechnung → Kostenstellen-Übersicht**
+
+Die Übersicht zeigt alle Kostenstellen mit:
+- Anzahl VMs
+- Monatliche Gesamtkosten
+- Jährliche Gesamtkosten
+- Aufschlüsselung je VM (vCPU, RAM, Preisquelle)
+
+**PDF-Report** pro Kostenstelle: Auf den **PDF-Button** klicken → druckoptimierte Ansicht öffnet sich → Browser-Druckdialog → *Als PDF speichern*.
+
+---
+
+### VM-Detailseite
+
+Auf jeder NetBox-VM-Seite erscheint rechts ein **„VDI Abrechnung"-Panel** mit:
+- Kostenstelle & Abteilung
+- Zugewiesen an
+- Preisprofil & Preisquelle
+- Berechnete Kosten/Monat und /Jahr
+
+---
 
 ## GPU-Erkennung
 
-Der GPU-Aufschlag wird addiert wenn das Custom Field `gpu` der VM einen truthy-Wert hat.  
-Custom Field in NetBox anlegen: *Customization → Custom Fields → Add*  
-- Object type: `virtualization | virtual machine`
-- Name: `gpu`
-- Type: Boolean oder Text
+Der GPU-Aufschlag wird automatisch addiert wenn das Custom Field **`gpu`** der VM einen Wert hat.
+
+Custom Field in NetBox anlegen:  
+*Customization → Custom Fields → Add*
+- **Object type:** `virtualization | virtual machine`
+- **Name:** `gpu`
+- **Type:** Text oder Boolean
+
+---
+
+## Installation (NetBox 4.5.x)
+
+```bash
+# 1. Plugin installieren
+sudo /opt/netbox/venv/bin/pip install \
+  https://github.com/kottpaul/netbox-vdi-billing/archive/refs/heads/main.tar.gz
+
+# 2. In configuration.py eintragen
+#    PLUGINS = ['netbox_vdi_billing']
+sudo nano /opt/netbox/netbox/netbox/configuration.py
+
+# 3. Datenbank-Migration
+cd /opt/netbox
+sudo -u root /opt/netbox/venv/bin/python netbox/manage.py migrate netbox_vdi_billing
+
+# 4. Static Files
+sudo -u root /opt/netbox/venv/bin/python netbox/manage.py collectstatic --no-input
+
+# 5. Neustart
+sudo systemctl restart netbox netbox-rq
+```
+
+### Update
+
+```bash
+sudo /opt/netbox/venv/bin/pip install --upgrade --force-reinstall \
+  https://github.com/kottpaul/netbox-vdi-billing/archive/refs/heads/main.tar.gz
+
+cd /opt/netbox
+sudo -u root /opt/netbox/venv/bin/python netbox/manage.py migrate netbox_vdi_billing
+sudo systemctl restart netbox netbox-rq
+```
+
+---
+
+## Menüstruktur
+
+```
+VDI Abrechnung (Sidebar)
+├── Auswertung
+│   ├── Kostenstellen-Übersicht   ← Hauptansicht mit Chargeback-Tabelle
+│   └── Alle Zuordnungen          ← Liste aller VM-Zuordnungen
+└── Konfiguration
+    └── Preisprofile              ← Preisregeln verwalten
+```
