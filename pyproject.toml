@@ -17,3 +17,9 @@ pdf = ["reportlab>=4.0"]  # optional für serverseitige PDF-Generierung
 
 [tool.setuptools.packages.find]
 include = ["netbox_vdi_billing*"]
+
+[tool.setuptools.package-data]
+netbox_vdi_billing = [
+    "templates/**/*.html",
+    "templates/**/**/*.html",
+]
