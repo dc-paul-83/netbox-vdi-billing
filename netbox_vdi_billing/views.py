@@ -7,7 +7,7 @@ from django.shortcuts import get_object_or_404
 from django.views import View
 from netbox.views import generic
 
-from . import forms, models, tables
+from . import filtersets, forms, models, tables
 
 
 # ─── VDIBillingProfile CRUD ───────────────────────────────────────────────────
@@ -25,6 +25,7 @@ class VDIBillingProfileListView(generic.ObjectListView):
         assignment_count=Count('assignments')
     )
     table = tables.VDIBillingProfileTable
+    filterset = filtersets.VDIBillingProfileFilterSet
 
 
 class VDIBillingProfileEditView(generic.ObjectEditView):
@@ -49,6 +50,7 @@ class VDIAssignmentView(generic.ObjectView):
 class VDIAssignmentListView(generic.ObjectListView):
     queryset = models.VDIAssignment.objects.select_related('virtual_machine', 'profile')
     table = tables.VDIAssignmentTable
+    filterset = filtersets.VDIAssignmentFilterSet
 
 
 class VDIAssignmentEditView(generic.ObjectEditView):
