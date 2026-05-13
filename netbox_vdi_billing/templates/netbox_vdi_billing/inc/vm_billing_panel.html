@@ -1,0 +1,85 @@
+{% load helpers %}
+
+<div class="card">
+  <h5 class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="mdi mdi-currency-eur text-primary"></i> VDI Abrechnung</span>
+    {% if assignment %}
+    <a href="{% url 'plugins:netbox_vdi_billing:vdiassignment_edit' assignment.pk %}"
+       class="btn btn-sm btn-outline-primary">
+      <i class="mdi mdi-pencil"></i> Bearbeiten
+    </a>
+    {% else %}
+    <a href="{% url 'plugins:netbox_vdi_billing:vdiassignment_add' %}?virtual_machine={{ vm.pk }}"
+       class="btn btn-sm btn-outline-success">
+      <i class="mdi mdi-plus"></i> Zuordnen
+    </a>
+    {% endif %}
+  </h5>
+
+  {% if assignment %}
+  <div class="card-body">
+    <table class="table table-sm">
+      <tr>
+        <th class="w-40">Kostenstelle</th>
+        <td>
+          {% if assignment.cost_center %}
+            <span class="fw-semibold">{{ assignment.cost_center }}</span>
+            {% if assignment.department %}
+              <span class="ms-1 badge bg-info text-dark">{{ assignment.department }}</span>
+            {% endif %}
+          {% else %}
+            <span class="text-warning"><i class="mdi mdi-alert"></i> Nicht zugewiesen</span>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <th>Zugewiesen an</th>
+        <td>{{ assignment.assigned_to|default:"—" }}</td>
+      </tr>
+      <tr>
+        <th>Preisprofil</th>
+        <td>
+          {% if assignment.profile %}
+            <a href="{{ assignment.profile.get_absolute_url }}">{{ assignment.profile }}</a>
+          {% else %}
+            <span class="text-muted">—</span>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <th>Preisquelle</th>
+        <td>
+          <span class="badge {% if assignment.cost_override is not None %}bg-warning text-dark{% else %}bg-light text-dark border{% endif %}">
+            {{ assignment.pricing_source }}
+          </span>
+        </td>
+      </tr>
+      <tr>
+        <th>Kosten/Monat</th>
+        <td class="fw-bold {% if assignment.cost_monthly > 0 %}text-primary{% endif %}">
+          {% if assignment.cost_monthly > 0 %}
+            {{ assignment.cost_monthly|floatformat:2 }} €
+          {% else %}
+            <span class="text-muted">—</span>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <th>Kosten/Jahr</th>
+        <td class="text-muted">
+          {% if assignment.cost_yearly > 0 %}{{ assignment.cost_yearly|floatformat:2 }} €{% else %}—{% endif %}
+        </td>
+      </tr>
+    </table>
+
+    {% if assignment.notes %}
+    <div class="mt-2 p-2 bg-light rounded small">{{ assignment.notes }}</div>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="card-body text-muted">
+    <i class="mdi mdi-information-outline"></i>
+    Für diese VM wurde noch keine Abrechnungszuordnung angelegt.
+  </div>
+  {% endif %}
+</div>

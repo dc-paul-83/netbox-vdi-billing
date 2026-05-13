@@ -1,0 +1,143 @@
+{% extends 'base/layout.html' %}
+{% load helpers %}
+
+{% block title %}VDI Kostenstellen-Übersicht{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+  <div class="col">
+    <h1 class="page-header">
+      <i class="mdi mdi-currency-eur"></i> VDI Kostenstellen-Übersicht
+    </h1>
+  </div>
+</div>
+
+{# ── KPI-Karten ── #}
+<div class="row mb-4">
+  <div class="col-md-3">
+    <div class="card">
+      <div class="card-body text-center">
+        <div class="text-muted small text-uppercase fw-bold mb-1">Kostenstellen</div>
+        <div class="fs-3 fw-bold">{{ groups|length }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card">
+      <div class="card-body text-center">
+        <div class="text-muted small text-uppercase fw-bold mb-1">VMs gesamt</div>
+        <div class="fs-3 fw-bold">{{ total_vms }}</div>
+        {% if unassigned_count %}
+        <div class="text-warning small mt-1">
+          <i class="mdi mdi-alert"></i> {{ unassigned_count }} ohne Kostenstelle
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card border-primary">
+      <div class="card-body text-center">
+        <div class="text-primary small text-uppercase fw-bold mb-1">Kosten / Monat</div>
+        <div class="fs-3 fw-bold text-primary">{{ total_monthly|floatformat:2 }} €</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card">
+      <div class="card-body text-center">
+        <div class="text-muted small text-uppercase fw-bold mb-1">Kosten / Jahr</div>
+        <div class="fs-3 fw-bold">{{ total_yearly|floatformat:2 }} €</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── Kostenstellen-Tabelle ── #}
+{% for group in groups %}
+<div class="card mb-3">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <div>
+      {% if group.cost_center|slice:":1" == "⚠" %}
+        <span class="text-warning fw-bold">
+          <i class="mdi mdi-alert"></i> {{ group.cost_center }}
+        </span>
+      {% else %}
+        <span class="fw-bold fs-6">{{ group.cost_center }}</span>
+        {% if group.department %}
+          <span class="ms-2 badge bg-info text-dark">{{ group.department }}</span>
+        {% endif %}
+      {% endif %}
+      <span class="ms-3 text-muted small">{{ group.vm_count }} VM{% if group.vm_count != 1 %}s{% endif %}</span>
+    </div>
+    <div class="d-flex align-items-center gap-3">
+      <span class="fw-bold text-primary">{{ group.total_monthly|floatformat:2 }} €/Monat</span>
+      <span class="text-muted small">≈ {{ group.total_yearly|floatformat:2 }} €/Jahr</span>
+      {% if group.cost_center|slice:":1" != "⚠" %}
+      <a href="{% url 'plugins:netbox_vdi_billing:chargeback_print' group.cost_center %}"
+         target="_blank" class="btn btn-sm btn-outline-secondary" title="Druckansicht / PDF">
+        <i class="mdi mdi-printer"></i> PDF
+      </a>
+      {% endif %}
+    </div>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-hover table-sm mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>VM-Name</th>
+          <th>vCPU</th>
+          <th>RAM</th>
+          <th>Zugewiesen an</th>
+          <th>Preisquelle</th>
+          <th class="text-end">€/Monat</th>
+          <th class="text-end">€/Jahr</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for vm in group.vms %}
+        <tr>
+          <td><a href="{{ vm.vm_url }}" class="fw-semibold">{{ vm.name }}</a></td>
+          <td>{{ vm.vcpus|default:"—" }}</td>
+          <td>{{ vm.memory_gb }} GB</td>
+          <td>{{ vm.assigned_to|default:"—" }}</td>
+          <td>
+            <span class="badge {% if vm.cost_override is not None %}bg-warning text-dark{% else %}bg-light text-dark border{% endif %}">
+              {{ vm.pricing_source }}
+            </span>
+          </td>
+          <td class="text-end {% if vm.cost_monthly > 0 %}text-primary fw-semibold{% endif %}">
+            {% if vm.cost_monthly > 0 %}{{ vm.cost_monthly|floatformat:2 }} €{% else %}—{% endif %}
+          </td>
+          <td class="text-end text-muted">
+            {% if vm.cost_monthly > 0 %}{{ vm.cost_monthly|floatformat:2|add:"" }}{% with yearly=vm.cost_monthly %}—{% endwith %}{% endif %}
+          </td>
+          <td class="text-end">
+            <a href="{{ vm.assignment_url }}/edit/" class="btn btn-xs btn-outline-secondary">
+              <i class="mdi mdi-pencil"></i>
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="table-light fw-bold">
+        <tr>
+          <td colspan="5" class="text-end">Summe</td>
+          <td class="text-end text-primary">{{ group.total_monthly|floatformat:2 }} €</td>
+          <td class="text-end text-muted">{{ group.total_yearly|floatformat:2 }} €</td>
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+{% empty %}
+<div class="alert alert-info">
+  <i class="mdi mdi-information"></i>
+  Noch keine VDI-Abrechnungszuordnungen vorhanden.
+  <a href="{% url 'plugins:netbox_vdi_billing:vdiassignment_add' %}" class="alert-link">Erste Zuordnung anlegen</a>
+</div>
+{% endfor %}
+
+{% endblock %}

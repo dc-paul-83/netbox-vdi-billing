@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "netbox-vdi-billing"
+version = "1.0.0"
+description = "Kostenstellen-basierte VDI-Abrechnung für NetBox"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+keywords = ["netbox", "plugin", "vdi", "billing", "chargeback"]
+dependencies = []  # keine externen Deps – läuft direkt in der NetBox-Umgebung
+
+[project.optional-dependencies]
+pdf = ["reportlab>=4.0"]  # optional für serverseitige PDF-Generierung
+
+[tool.setuptools.packages.find]
+include = ["netbox_vdi_billing*"]

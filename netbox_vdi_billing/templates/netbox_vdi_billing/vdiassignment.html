@@ -1,0 +1,80 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-6">
+    <div class="card">
+      <h5 class="card-header">Abrechnungsdetails</h5>
+      <div class="card-body">
+        <table class="table table-sm">
+          <tr>
+            <th class="w-40">Virtuelle Maschine</th>
+            <td><a href="{{ object.virtual_machine.get_absolute_url }}" class="fw-semibold">{{ object.virtual_machine.name }}</a></td>
+          </tr>
+          <tr>
+            <th>Kostenstelle</th>
+            <td>{{ object.cost_center|default:"—" }}</td>
+          </tr>
+          <tr>
+            <th>Abteilung</th>
+            <td>{{ object.department|default:"—" }}</td>
+          </tr>
+          <tr>
+            <th>Zugewiesen an</th>
+            <td>{{ object.assigned_to|default:"—" }}</td>
+          </tr>
+          <tr>
+            <th>Preisprofil</th>
+            <td>
+              {% if object.profile %}
+                <a href="{{ object.profile.get_absolute_url }}">{{ object.profile }}</a>
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          <tr>
+            <th>Festpreis</th>
+            <td>
+              {% if object.cost_override is not None %}
+                <span class="fw-bold text-warning">{{ object.cost_override|floatformat:2 }} €</span>
+                <span class="text-muted small ms-1">(überschreibt Profil)</span>
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          <tr>
+            <th>Berechnete Kosten</th>
+            <td class="fw-bold {% if object.cost_monthly > 0 %}text-primary{% endif %}">
+              {{ object.cost_monthly|floatformat:2 }} € / Monat
+            </td>
+          </tr>
+          <tr>
+            <th>Jährliche Kosten</th>
+            <td>{{ object.cost_yearly|floatformat:2 }} €</td>
+          </tr>
+        </table>
+        {% if object.notes %}
+        <hr>
+        <div class="text-muted small">{{ object.notes }}</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card">
+      <h5 class="card-header">VM-Ressourcen</h5>
+      <div class="card-body">
+        {% with vm=object.virtual_machine %}
+        <table class="table table-sm">
+          <tr><th class="w-40">vCPUs</th><td>{{ vm.vcpus|default:"—" }}</td></tr>
+          <tr><th>RAM</th><td>{% if vm.memory %}{{ vm.memory }} MB ({{ vm.memory|floatformat:0 }}{% if vm.memory >= 1024 %} = {{ vm.memory|divisibleby:1024 }} GB{% endif %}){% else %}—{% endif %}</td></tr>
+          <tr><th>Status</th><td>{{ vm.get_status_display }}</td></tr>
+          <tr><th>Cluster</th><td>{% if vm.cluster %}<a href="{{ vm.cluster.get_absolute_url }}">{{ vm.cluster }}</a>{% else %}—{% endif %}</td></tr>
+          <tr><th>Tenant</th><td>{% if vm.tenant %}<a href="{{ vm.tenant.get_absolute_url }}">{{ vm.tenant }}</a>{% else %}—{% endif %}</td></tr>
+        </table>
+        {% endwith %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

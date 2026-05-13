@@ -1,0 +1,71 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-6">
+    <div class="card">
+      <h5 class="card-header">Preisprofil</h5>
+      <div class="card-body">
+        <table class="table table-sm">
+          <tr><th class="w-40">Name</th><td>{{ object.name }}</td></tr>
+          <tr><th>Grundpreis</th><td>{{ object.base_price|floatformat:2 }} €/Monat</td></tr>
+          <tr><th>Preis pro vCPU</th><td>{{ object.vcpu_price|floatformat:2 }} €/Monat</td></tr>
+          <tr><th>Preis pro GB RAM</th><td>{{ object.ram_price_per_gb|floatformat:2 }} €/Monat</td></tr>
+          <tr><th>GPU-Aufschlag</th><td>{{ object.gpu_surcharge|floatformat:2 }} €/Monat</td></tr>
+          {% if object.description %}
+          <tr><th>Beschreibung</th><td>{{ object.description }}</td></tr>
+          {% endif %}
+        </table>
+      </div>
+    </div>
+
+    {# Beispielrechnung #}
+    <div class="card mt-3">
+      <h5 class="card-header">Beispielkalkulation</h5>
+      <div class="card-body">
+        <table class="table table-sm table-bordered">
+          <thead class="table-light">
+            <tr><th>Konfiguration</th><th class="text-end">€/Monat</th></tr>
+          </thead>
+          <tbody>
+            {% with b=object.base_price vc=object.vcpu_price r=object.ram_price_per_gb %}
+            <tr>
+              <td>2 vCPU, 4 GB RAM (Standard)</td>
+              <td class="text-end">{{ b|add:vc|add:vc|add:r|add:r|add:r|add:r|floatformat:2 }} €</td>
+            </tr>
+            {% endwith %}
+          </tbody>
+        </table>
+        <div class="text-muted small">Grundpreis + vCPU × Preis + RAM_GB × Preis</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card">
+      <h5 class="card-header">Zugeordnete VMs ({{ assignments|length }})</h5>
+      <div class="card-body p-0">
+        {% if assignments %}
+        <table class="table table-sm mb-0">
+          <thead class="table-light">
+            <tr><th>VM</th><th>Kostenstelle</th><th class="text-end">€/Monat</th></tr>
+          </thead>
+          <tbody>
+            {% for a in assignments %}
+            <tr>
+              <td><a href="{{ a.virtual_machine.get_absolute_url }}">{{ a.virtual_machine.name }}</a></td>
+              <td>{{ a.cost_center|default:"—" }}</td>
+              <td class="text-end">{{ a.cost_monthly|floatformat:2 }} €</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="p-3 text-muted">Noch keine VMs mit diesem Profil verknüpft.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
