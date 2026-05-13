@@ -73,8 +73,8 @@
     <div class="d-flex align-items-center gap-3">
       <span class="fw-bold text-primary">{{ group.total_monthly|floatformat:2 }} €/Monat</span>
       <span class="text-muted small">≈ {{ group.total_yearly|floatformat:2 }} €/Jahr</span>
-      {% if group.cost_center|slice:":1" != "⚠" %}
-      <a href="{% url 'plugins:netbox_vdi_billing:chargeback_print' group.cost_center %}"
+      {% if group.cost_center_pk %}
+      <a href="{% url 'plugins:netbox_vdi_billing:chargeback_print' group.cost_center_pk %}"
          target="_blank" class="btn btn-sm btn-outline-secondary" title="Druckansicht / PDF">
         <i class="mdi mdi-printer"></i> PDF
       </a>
@@ -136,7 +136,7 @@
 <div class="alert alert-info">
   <i class="mdi mdi-information"></i>
   Noch keine VDI-Abrechnungszuordnungen vorhanden.
-  <a href="{% url 'plugins:netbox_vdi_billing:vdiassignment_add' %}" class="alert-link">Erste Zuordnung anlegen</a>
+  <a href="{% url 'plugins:netbox_vdi_billing:bulk_assign' %}" class="alert-link">Kostenstellen und VMs jetzt zuordnen →</a>
 </div>
 {% endfor %}
 

@@ -1,14 +1,48 @@
 from collections import defaultdict
 from netbox.views import generic as nb_generic
+from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Count
 from django.http import HttpResponse
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
 from netbox.views import generic
 
 from . import filtersets, forms, models, tables
+
+
+# ─── CostCenter CRUD ──────────────────────────────────────────────────────────
+
+class CostCenterView(generic.ObjectView):
+    queryset = models.CostCenter.objects.prefetch_related('assignments__virtual_machine')
+
+    def get_extra_context(self, request, instance):
+        assignments = instance.assignments.select_related(
+            'virtual_machine', 'profile'
+        ).order_by('virtual_machine__name')
+        return {'assignments': assignments}
+
+
+class CostCenterListView(generic.ObjectListView):
+    queryset = models.CostCenter.objects.annotate(
+        vm_count=Count('assignments')
+    )
+    table = tables.CostCenterTable
+    filterset = filtersets.CostCenterFilterSet
+
+
+class CostCenterEditView(generic.ObjectEditView):
+    queryset = models.CostCenter.objects.all()
+    form = forms.CostCenterForm
+
+
+class CostCenterDeleteView(generic.ObjectDeleteView):
+    queryset = models.CostCenter.objects.all()
+
+
+class CostCenterChangeLogView(nb_generic.ObjectChangeLogView):
+    queryset = models.CostCenter.objects.all()
 
 
 # ─── VDIBillingProfile CRUD ───────────────────────────────────────────────────
@@ -45,11 +79,11 @@ class VDIBillingProfileChangeLogView(nb_generic.ObjectChangeLogView):
 # ─── VDIAssignment CRUD ───────────────────────────────────────────────────────
 
 class VDIAssignmentView(generic.ObjectView):
-    queryset = models.VDIAssignment.objects.select_related('virtual_machine', 'profile')
+    queryset = models.VDIAssignment.objects.select_related('virtual_machine', 'profile', 'cost_center')
 
 
 class VDIAssignmentListView(generic.ObjectListView):
-    queryset = models.VDIAssignment.objects.select_related('virtual_machine', 'profile')
+    queryset = models.VDIAssignment.objects.select_related('virtual_machine', 'profile', 'cost_center')
     table = tables.VDIAssignmentTable
     filterset = filtersets.VDIAssignmentFilterSet
 
@@ -67,35 +101,165 @@ class VDIAssignmentChangeLogView(nb_generic.ObjectChangeLogView):
     queryset = models.VDIAssignment.objects.all()
 
 
+# ─── Bulk Assign ─────────────────────────────────────────────────────────────
+
+class BulkAssignCostCenterView(LoginRequiredMixin, View):
+    """
+    Massen-Zuweisung: Mehrere VMs gleichzeitig einer Kostenstelle zuordnen.
+    """
+    template_name = 'netbox_vdi_billing/bulk_assign.html'
+
+    def _get_vm_queryset(self):
+        from extras.models import Tag
+        from virtualization.models import VirtualMachine
+        try:
+            tag = Tag.objects.get(name='VDI-Persistent')
+            return VirtualMachine.objects.filter(tags=tag).order_by('name')
+        except Tag.DoesNotExist:
+            return VirtualMachine.objects.filter(
+                role__name__icontains='VDI'
+            ).order_by('name')
+
+    def get(self, request):
+        vm_qs = self._get_vm_queryset()
+        assigned_ids = set(
+            models.VDIAssignment.objects.values_list('virtual_machine_id', flat=True)
+        )
+        # Kostenstellen-Zuordnung für Anzeige
+        vm_cost_centers = {
+            a.virtual_machine_id: a.cost_center
+            for a in models.VDIAssignment.objects.select_related('cost_center')
+        }
+
+        # VMs mit Gruppenprefix gruppieren
+        groups = _group_vms_by_prefix(vm_qs, assigned_ids, vm_cost_centers)
+
+        form = forms.BulkAssignCostCenterForm(vm_queryset=vm_qs)
+        return render(request, self.template_name, {
+            'form': form,
+            'vm_groups': groups,
+            'vm_count': vm_qs.count(),
+        })
+
+    def post(self, request):
+        vm_qs = self._get_vm_queryset()
+        form = forms.BulkAssignCostCenterForm(request.POST, vm_queryset=vm_qs)
+
+        if not form.is_valid():
+            assigned_ids = set(
+                models.VDIAssignment.objects.values_list('virtual_machine_id', flat=True)
+            )
+            vm_cost_centers = {
+                a.virtual_machine_id: a.cost_center
+                for a in models.VDIAssignment.objects.select_related('cost_center')
+            }
+            groups = _group_vms_by_prefix(vm_qs, assigned_ids, vm_cost_centers)
+            return render(request, self.template_name, {
+                'form': form,
+                'vm_groups': groups,
+                'vm_count': vm_qs.count(),
+            })
+
+        cost_center = form.cleaned_data['cost_center']
+        profile     = form.cleaned_data.get('profile')
+        overwrite   = form.cleaned_data['overwrite']
+        selected_vms = form.cleaned_data['virtual_machines']
+
+        created = updated = skipped = 0
+        for vm in selected_vms:
+            exists = models.VDIAssignment.objects.filter(virtual_machine=vm).exists()
+            if exists and not overwrite:
+                skipped += 1
+                continue
+
+            defaults = {'cost_center': cost_center}
+            if profile:
+                defaults['profile'] = profile
+
+            _, was_created = models.VDIAssignment.objects.update_or_create(
+                virtual_machine=vm,
+                defaults=defaults,
+            )
+            if was_created:
+                created += 1
+            else:
+                updated += 1
+
+        messages.success(
+            request,
+            f'Kostenstelle <strong>{cost_center}</strong>: '
+            f'{created} neu erstellt, {updated} aktualisiert, {skipped} übersprungen.'
+        )
+        return redirect(reverse('plugins:netbox_vdi_billing:chargeback_overview'))
+
+
+def _group_vms_by_prefix(vm_qs, assigned_ids, vm_cost_centers):
+    """Gruppiert VMs nach Standort-Präfix für die Bulk-Assign-Ansicht."""
+    PREFIX_LABELS = {
+        'atwie':    'AT Wien',
+        'chber':    'CH Bern',
+        'deber':    'DE Berlin',
+        'dehol':    'DE Holzminden',
+        'deopp':    'DE Oppau',
+        'desto':    'DE Stuttgart',
+        'sg':       'Singapore',
+    }
+    groups = defaultdict(lambda: {'label': '', 'vms': []})
+
+    for vm in vm_qs:
+        prefix = vm.name.lower().split('-')[0]
+        label  = PREFIX_LABELS.get(prefix, prefix.upper())
+        groups[prefix]['label'] = label
+        groups[prefix]['vms'].append({
+            'id':          vm.pk,
+            'name':        vm.name,
+            'assigned':    vm.pk in assigned_ids,
+            'cost_center': vm_cost_centers.get(vm.pk),
+        })
+
+    return sorted(groups.values(), key=lambda g: g['label'])
+
+
 # ─── Chargeback Übersicht ─────────────────────────────────────────────────────
 
 def _build_chargeback_groups(assignments):
     """Gruppiert Zuordnungen nach Kostenstelle und berechnet Summen."""
     raw = defaultdict(lambda: {
-        'cost_center': '',
-        'department': '',
+        'cost_center':    '',
+        'cost_center_pk': None,
+        'department':     '',
         'vms': [],
         'total_monthly': 0.0,
     })
 
     for a in assignments:
-        key = a.cost_center or '⚠ Keine Kostenstelle'
+        if a.cost_center:
+            key  = a.cost_center.number
+            dept = a.cost_center.department
+            cc_pk = a.cost_center.pk
+        else:
+            key  = '⚠ Keine Kostenstelle'
+            dept = ''
+            cc_pk = None
+
         grp = raw[key]
-        grp['cost_center'] = key
-        if not grp['department'] and a.department:
-            grp['department'] = a.department
+        grp['cost_center']    = key
+        grp['cost_center_pk'] = cc_pk
+        if not grp['department'] and dept:
+            grp['department'] = dept
+
         cost = a.cost_monthly
         grp['vms'].append({
-            'name': a.virtual_machine.name,
-            'vcpus': a.virtual_machine.vcpus,
-            'memory_gb': round(float(a.virtual_machine.memory or 0) / 1024, 1),
-            'assigned_to': a.assigned_to,
-            'profile': str(a.profile) if a.profile else None,
-            'cost_override': float(a.cost_override) if a.cost_override is not None else None,
-            'cost_monthly': cost,
-            'pricing_source': a.pricing_source,
-            'vm_url': a.virtual_machine.get_absolute_url(),
-            'assignment_url': a.get_absolute_url(),
+            'name':                a.virtual_machine.name,
+            'vcpus':               a.virtual_machine.vcpus,
+            'memory_gb':           round(float(a.virtual_machine.memory or 0) / 1024, 1),
+            'assigned_to':         a.assigned_to,
+            'profile':             str(a.profile) if a.profile else None,
+            'cost_override':       float(a.cost_override) if a.cost_override is not None else None,
+            'cost_monthly':        cost,
+            'pricing_source':      a.pricing_source,
+            'vm_url':              a.virtual_machine.get_absolute_url(),
+            'assignment_url':      a.get_absolute_url(),
             'assignment_edit_url': reverse(
                 'plugins:netbox_vdi_billing:vdiassignment_edit', args=[a.pk]
             ),
@@ -103,7 +267,6 @@ def _build_chargeback_groups(assignments):
         grp['total_monthly'] += cost
 
     groups = list(raw.values())
-    # Ohne Kostenstelle ans Ende
     groups.sort(key=lambda g: (g['cost_center'].startswith('⚠'), g['cost_center'].lower()))
     for g in groups:
         g['total_yearly'] = round(g['total_monthly'] * 12, 2)
@@ -116,10 +279,9 @@ class ChargebackOverviewView(LoginRequiredMixin, View):
     template_name = 'netbox_vdi_billing/chargeback_overview.html'
 
     def get(self, request):
-        from django.shortcuts import render
         assignments = models.VDIAssignment.objects.select_related(
-            'virtual_machine', 'profile'
-        ).order_by('cost_center', 'virtual_machine__name')
+            'virtual_machine', 'profile', 'cost_center'
+        ).order_by('cost_center__number', 'virtual_machine__name')
 
         groups = _build_chargeback_groups(assignments)
         total_monthly = sum(g['total_monthly'] for g in groups)
@@ -132,22 +294,17 @@ class ChargebackOverviewView(LoginRequiredMixin, View):
             'total_yearly': total_yearly,
             'total_vms': total_vms,
             'assigned_count': models.VDIAssignment.objects.filter(
-                cost_center__gt='').count(),
+                cost_center__isnull=False).count(),
             'unassigned_count': models.VDIAssignment.objects.filter(
-                cost_center='').count(),
+                cost_center__isnull=True).count(),
         })
 
 
 # ─── PDF / Druckansicht pro Kostenstelle ─────────────────────────────────────
 
 class ChargebackPrintView(LoginRequiredMixin, View):
-    """
-    Druckoptimierte HTML-Ansicht für eine Kostenstelle.
-    Browser: Datei → Drucken → Als PDF speichern.
-    Alternativ: reportlab-PDF wenn das Paket installiert ist.
-    """
-
-    def get(self, request, cost_center):
+    def get(self, request, cost_center_pk):
+        cost_center = get_object_or_404(models.CostCenter, pk=cost_center_pk)
         assignments = models.VDIAssignment.objects.filter(
             cost_center=cost_center
         ).select_related('virtual_machine', 'profile').order_by('virtual_machine__name')
@@ -162,33 +319,29 @@ class ChargebackPrintView(LoginRequiredMixin, View):
             cost = a.cost_monthly
             total += cost
             vms.append({
-                'name': a.virtual_machine.name,
-                'vcpus': a.virtual_machine.vcpus,
-                'memory_gb': round(float(a.virtual_machine.memory or 0) / 1024, 1),
-                'assigned_to': a.assigned_to,
+                'name':          a.virtual_machine.name,
+                'vcpus':         a.virtual_machine.vcpus,
+                'memory_gb':     round(float(a.virtual_machine.memory or 0) / 1024, 1),
+                'assigned_to':   a.assigned_to,
                 'pricing_source': a.pricing_source,
-                'cost_monthly': cost,
+                'cost_monthly':  cost,
             })
 
-        department = assignments.first().department or ''
-
-        # Versuche reportlab-PDF; Fallback: print-HTML
         fmt = request.GET.get('format', 'html')
         if fmt == 'pdf':
-            return self._pdf_response(cost_center, department, vms, total)
+            return self._pdf_response(cost_center, vms, total)
 
-        from django.shortcuts import render
         from datetime import date
         return render(request, 'netbox_vdi_billing/chargeback_print.html', {
-            'cost_center': cost_center,
-            'department': department,
-            'vms': vms,
+            'cost_center':   cost_center.number,
+            'department':    cost_center.department,
+            'vms':           vms,
             'total_monthly': round(total, 2),
-            'total_yearly': round(total * 12, 2),
-            'month': date.today().strftime('%B %Y'),
+            'total_yearly':  round(total * 12, 2),
+            'month':         date.today().strftime('%B %Y'),
         })
 
-    def _pdf_response(self, cost_center, department, vms, total):
+    def _pdf_response(self, cost_center, vms, total):
         try:
             from reportlab.lib import colors
             from reportlab.lib.pagesizes import A4
@@ -203,17 +356,17 @@ class ChargebackPrintView(LoginRequiredMixin, View):
                                     leftMargin=2*cm, rightMargin=2*cm,
                                     topMargin=2*cm, bottomMargin=2*cm)
             styles = getSampleStyleSheet()
-            story = []
+            story  = []
 
             month = date.today().strftime('%B %Y')
-            story.append(Paragraph(f'Chargeback – Kostenstelle {cost_center}', styles['h1']))
-            if department:
-                story.append(Paragraph(f'Abteilung: {department}', styles['Normal']))
+            story.append(Paragraph(f'Chargeback – Kostenstelle {cost_center.number}', styles['h1']))
+            if cost_center.department:
+                story.append(Paragraph(f'Abteilung: {cost_center.department}', styles['Normal']))
             story.append(Paragraph(f'Abrechnungsmonat: {month}', styles['Normal']))
             story.append(Spacer(1, 0.5*cm))
 
             header = ['VM-Name', 'vCPU', 'RAM (GB)', 'Zugewiesen an', 'Preisquelle', '€/Monat']
-            data = [header]
+            data   = [header]
             for vm in vms:
                 data.append([
                     vm['name'],
@@ -244,11 +397,9 @@ class ChargebackPrintView(LoginRequiredMixin, View):
             buf.seek(0)
             resp = HttpResponse(buf, content_type='application/pdf')
             resp['Content-Disposition'] = (
-                f'attachment; filename="chargeback_{cost_center}.pdf"'
+                f'attachment; filename="chargeback_{cost_center.number}.pdf"'
             )
             return resp
 
         except ImportError:
-            # reportlab nicht installiert → print-HTML als Fallback
-            from django.shortcuts import redirect
             return redirect(f'?format=html')

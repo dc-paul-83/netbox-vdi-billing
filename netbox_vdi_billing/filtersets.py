@@ -1,6 +1,12 @@
 import django_filters
 from netbox.filtersets import NetBoxModelFilterSet
-from .models import VDIBillingProfile, VDIAssignment
+from .models import CostCenter, VDIBillingProfile, VDIAssignment
+
+
+class CostCenterFilterSet(NetBoxModelFilterSet):
+    class Meta:
+        model = CostCenter
+        fields = ('number', 'name', 'department')
 
 
 class VDIBillingProfileFilterSet(NetBoxModelFilterSet):
@@ -12,4 +18,4 @@ class VDIBillingProfileFilterSet(NetBoxModelFilterSet):
 class VDIAssignmentFilterSet(NetBoxModelFilterSet):
     class Meta:
         model = VDIAssignment
-        fields = ('cost_center', 'department', 'assigned_to', 'profile')
+        fields = ('cost_center', 'assigned_to', 'profile')

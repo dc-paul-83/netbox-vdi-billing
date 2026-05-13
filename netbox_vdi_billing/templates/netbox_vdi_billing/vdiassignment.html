@@ -14,11 +14,14 @@
           </tr>
           <tr>
             <th>Kostenstelle</th>
-            <td>{{ object.cost_center|default:"—" }}</td>
-          </tr>
-          <tr>
-            <th>Abteilung</th>
-            <td>{{ object.department|default:"—" }}</td>
+            <td>
+              {% if object.cost_center %}
+                <a href="{{ object.cost_center.get_absolute_url }}">{{ object.cost_center }}</a>
+                {% if object.cost_center.department %}
+                  <span class="ms-2 badge bg-info text-dark">{{ object.cost_center.department }}</span>
+                {% endif %}
+              {% else %}—{% endif %}
+            </td>
           </tr>
           <tr>
             <th>Zugewiesen an</th>

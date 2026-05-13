@@ -35,7 +35,7 @@ import csv
 
 from django.core.management.base import BaseCommand, CommandError
 from virtualization.models import VirtualMachine
-from netbox_vdi_billing.models import VDIBillingProfile, VDIAssignment
+from netbox_vdi_billing.models import CostCenter, VDIBillingProfile, VDIAssignment
 
 
 class Command(BaseCommand):
@@ -198,6 +198,14 @@ class Command(BaseCommand):
                         errors += 1
                         continue
 
+                # Kostenstelle als Objekt
+                cost_center_obj = None
+                if cost_center:
+                    cost_center_obj, _ = CostCenter.objects.get_or_create(
+                        number=cost_center,
+                        defaults={'name': cost_center, 'department': department},
+                    )
+
                 exists = VDIAssignment.objects.filter(virtual_machine=vm).exists()
                 if exists and not options['overwrite']:
                     skipped += 1
@@ -213,8 +221,7 @@ class Command(BaseCommand):
                     VDIAssignment.objects.update_or_create(
                         virtual_machine=vm,
                         defaults={
-                            'cost_center': cost_center,
-                            'department': department,
+                            'cost_center': cost_center_obj,
                             'profile': profile,
                         },
                     )
@@ -338,8 +345,16 @@ class Command(BaseCommand):
                 skipped += 1
                 continue
 
-            cost_center = self._get_field(vm, cc_field) or ''
-            department  = self._get_field(vm, dept_field) or '' if dept_field else ''
+            cost_center_str = self._get_field(vm, cc_field) or ''
+            dept_str        = self._get_field(vm, dept_field) or '' if dept_field else ''
+
+            # Kostenstelle als Objekt suchen oder anlegen
+            cost_center_obj = None
+            if cost_center_str:
+                cost_center_obj, _ = CostCenter.objects.get_or_create(
+                    number=cost_center_str,
+                    defaults={'name': cost_center_str, 'department': dept_str},
+                )
 
             profile = default_profile
             if gpu_pattern and vm.cluster:
@@ -349,7 +364,7 @@ class Command(BaseCommand):
             action = 'Aktualisiert' if exists else 'Erstellt'
             self.stdout.write(
                 f'  {"[DRY]" if dry_run else "✓"} {action}: {vm.name:<40} '
-                f'KST={cost_center or "–":<15} '
+                f'KST={cost_center_str or "–":<15} '
                 f'Profil={profile.name if profile else "–"}'
             )
 
@@ -357,8 +372,7 @@ class Command(BaseCommand):
                 VDIAssignment.objects.update_or_create(
                     virtual_machine=vm,
                     defaults={
-                        'cost_center': cost_center,
-                        'department': department,
+                        'cost_center': cost_center_obj,
                         'profile': profile,
                     },
                 )

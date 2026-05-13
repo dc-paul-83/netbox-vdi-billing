@@ -5,7 +5,18 @@ urlpatterns = [
 
     # ── Chargeback Übersicht ──────────────────────────────────────────────────
     path('', views.ChargebackOverviewView.as_view(), name='chargeback_overview'),
-    path('print/<str:cost_center>/', views.ChargebackPrintView.as_view(), name='chargeback_print'),
+    path('print/<int:cost_center_pk>/', views.ChargebackPrintView.as_view(), name='chargeback_print'),
+
+    # ── Kostenstellen ─────────────────────────────────────────────────────────
+    path('cost-centers/', views.CostCenterListView.as_view(), name='costcenter_list'),
+    path('cost-centers/add/', views.CostCenterEditView.as_view(), name='costcenter_add'),
+    path('cost-centers/<int:pk>/', views.CostCenterView.as_view(), name='costcenter'),
+    path('cost-centers/<int:pk>/edit/', views.CostCenterEditView.as_view(), name='costcenter_edit'),
+    path('cost-centers/<int:pk>/delete/', views.CostCenterDeleteView.as_view(), name='costcenter_delete'),
+    path('cost-centers/<int:pk>/changelog/', views.CostCenterChangeLogView.as_view(), name='costcenter_changelog'),
+
+    # ── Massen-Zuweisung ─────────────────────────────────────────────────────
+    path('bulk-assign/', views.BulkAssignCostCenterView.as_view(), name='bulk_assign'),
 
     # ── Preisprofile ──────────────────────────────────────────────────────────
     path('profiles/', views.VDIBillingProfileListView.as_view(), name='vdibillingprofile_list'),

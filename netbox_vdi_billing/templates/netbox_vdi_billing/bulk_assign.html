@@ -1,0 +1,156 @@
+{% extends 'base/layout.html' %}
+{% load helpers %}
+
+{% block title %}Massen-Zuweisung{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2><i class="mdi mdi-checkbox-multiple-marked me-2"></i>Massen-Zuweisung</h2>
+  <a href="{% url 'plugins:netbox_vdi_billing:costcenter_list' %}" class="btn btn-outline-secondary btn-sm">
+    <i class="mdi mdi-arrow-left"></i> Kostenstellen
+  </a>
+</div>
+
+<form method="post">
+  {% csrf_token %}
+
+  <div class="row">
+    <!-- Linke Spalte: Einstellungen -->
+    <div class="col-md-4">
+      <div class="card mb-3">
+        <h5 class="card-header">Ziel-Kostenstelle</h5>
+        <div class="card-body">
+          {% if form.cost_center.errors %}
+          <div class="alert alert-danger py-1 small">{{ form.cost_center.errors }}</div>
+          {% endif %}
+          {{ form.cost_center }}
+
+          {% if not form.cost_center.field.queryset.exists %}
+          <div class="mt-2 text-warning small">
+            <i class="mdi mdi-alert"></i>
+            Noch keine Kostenstellen angelegt.
+            <a href="{% url 'plugins:netbox_vdi_billing:costcenter_add' %}">Jetzt anlegen →</a>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <h5 class="card-header">Preisprofil <span class="text-muted fw-normal small">(optional)</span></h5>
+        <div class="card-body">
+          {{ form.profile }}
+          <div class="form-text">Nur setzen wenn alle gewählten VMs dasselbe Profil bekommen sollen.</div>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <h5 class="card-header">Optionen</h5>
+        <div class="card-body">
+          <div class="form-check">
+            {{ form.overwrite }}
+            <label class="form-check-label" for="{{ form.overwrite.id_for_label }}">
+              Bestehende Zuordnungen überschreiben
+            </label>
+          </div>
+          <div class="form-text mt-1">
+            Ohne dieses Häkchen werden VMs die bereits einer Kostenstelle zugeordnet sind übersprungen.
+          </div>
+        </div>
+      </div>
+
+      <div class="d-grid gap-2">
+        <button type="submit" class="btn btn-primary">
+          <i class="mdi mdi-check-bold"></i>
+          Zuordnung speichern
+        </button>
+        <a href="{% url 'plugins:netbox_vdi_billing:chargeback_overview' %}" class="btn btn-outline-secondary">
+          Abbrechen
+        </a>
+      </div>
+    </div>
+
+    <!-- Rechte Spalte: VM-Auswahl -->
+    <div class="col-md-8">
+      <div class="card">
+        <h5 class="card-header d-flex justify-content-between align-items-center">
+          VMs auswählen
+          <div class="btn-group btn-group-sm">
+            <button type="button" class="btn btn-outline-secondary" onclick="selectAll()">
+              <i class="mdi mdi-checkbox-multiple-marked-outline"></i> Alle wählen
+            </button>
+            <button type="button" class="btn btn-outline-secondary" onclick="selectNone()">
+              <i class="mdi mdi-checkbox-multiple-blank-outline"></i> Alle abwählen
+            </button>
+          </div>
+        </h5>
+        {% if form.virtual_machines.errors %}
+        <div class="alert alert-danger m-2 py-1 small">{{ form.virtual_machines.errors }}</div>
+        {% endif %}
+        <div class="card-body p-0" style="max-height: 70vh; overflow-y: auto;">
+
+          {% for group in vm_groups %}
+          <div class="px-3 py-2 bg-light border-bottom d-flex justify-content-between align-items-center sticky-top">
+            <strong>{{ group.label }}</strong>
+            <button type="button" class="btn btn-xs btn-outline-secondary"
+                    onclick="selectGroup('group-{{ forloop.counter }}')">
+              Gruppe wählen
+            </button>
+          </div>
+          <div id="group-{{ forloop.counter }}">
+            {% for vm in group.vms %}
+            <div class="px-3 py-1 border-bottom d-flex align-items-center {% if vm.assigned %}bg-light{% endif %}">
+              <div class="form-check mb-0 flex-grow-1">
+                <input class="form-check-input vm-checkbox"
+                       type="checkbox"
+                       name="virtual_machines"
+                       value="{{ vm.id }}"
+                       id="vm_{{ vm.id }}"
+                       {% if vm.id in form.virtual_machines.value %}checked{% endif %}>
+                <label class="form-check-label" for="vm_{{ vm.id }}">
+                  {{ vm.name }}
+                </label>
+              </div>
+              {% if vm.cost_center %}
+              <span class="badge bg-info text-dark ms-2 small">{{ vm.cost_center }}</span>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+          {% empty %}
+          <div class="p-3 text-muted">
+            Keine VMs mit Tag <code>VDI-Persistent</code> gefunden.
+            Bitte erst <code>sync_horizon_tags</code> ausführen.
+          </div>
+          {% endfor %}
+
+        </div>
+        <div class="card-footer text-muted small">
+          {{ vm_count }} VMs gesamt |
+          <span id="selected-count">0</span> ausgewählt
+        </div>
+      </div>
+    </div>
+  </div>
+</form>
+
+<script>
+function updateCount() {
+  const n = document.querySelectorAll('.vm-checkbox:checked').length;
+  document.getElementById('selected-count').textContent = n;
+}
+function selectAll() {
+  document.querySelectorAll('.vm-checkbox').forEach(cb => cb.checked = true);
+  updateCount();
+}
+function selectNone() {
+  document.querySelectorAll('.vm-checkbox').forEach(cb => cb.checked = false);
+  updateCount();
+}
+function selectGroup(groupId) {
+  document.querySelectorAll('#' + groupId + ' .vm-checkbox').forEach(cb => cb.checked = true);
+  updateCount();
+}
+document.querySelectorAll('.vm-checkbox').forEach(cb => cb.addEventListener('change', updateCount));
+updateCount();
+</script>
+{% endblock %}

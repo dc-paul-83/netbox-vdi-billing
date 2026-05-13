@@ -23,9 +23,9 @@
         <th class="w-40">Kostenstelle</th>
         <td>
           {% if assignment.cost_center %}
-            <span class="fw-semibold">{{ assignment.cost_center }}</span>
-            {% if assignment.department %}
-              <span class="ms-1 badge bg-info text-dark">{{ assignment.department }}</span>
+            <a href="{{ assignment.cost_center.get_absolute_url }}" class="fw-semibold">{{ assignment.cost_center }}</a>
+            {% if assignment.cost_center.department %}
+              <span class="ms-1 badge bg-info text-dark">{{ assignment.cost_center.department }}</span>
             {% endif %}
           {% else %}
             <span class="text-warning"><i class="mdi mdi-alert"></i> Nicht zugewiesen</span>

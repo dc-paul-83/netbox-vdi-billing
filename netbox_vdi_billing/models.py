@@ -5,6 +5,52 @@ from netbox.models import NetBoxModel
 from virtualization.models import VirtualMachine
 
 
+class CostCenter(NetBoxModel):
+    """
+    Kostenstelle — wird mit VDI-Zuordnungen verknüpft.
+    Mehrere VMs können derselben Kostenstelle zugewiesen werden.
+    """
+    number = models.CharField(
+        max_length=50,
+        unique=True,
+        verbose_name='KST-Nummer',
+        help_text='Eindeutige Kostenstellen-Nummer, z.B. 11554',
+    )
+    name = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name='Bezeichnung',
+        help_text='Optionaler Name der Kostenstelle',
+    )
+    department = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name='Abteilung',
+    )
+    description = models.TextField(blank=True, verbose_name='Beschreibung')
+
+    class Meta:
+        ordering = ['number']
+        verbose_name = 'Kostenstelle'
+        verbose_name_plural = 'Kostenstellen'
+
+    def __str__(self):
+        if self.name:
+            return f'{self.number} – {self.name}'
+        return self.number
+
+    def get_absolute_url(self):
+        return reverse('plugins:netbox_vdi_billing:costcenter', args=[self.pk])
+
+    @property
+    def vm_count(self):
+        return self.assignments.count()
+
+    @property
+    def total_monthly(self):
+        return round(sum(a.cost_monthly for a in self.assignments.select_related('profile', 'virtual_machine')), 2)
+
+
 class VDIBillingProfile(NetBoxModel):
     """
     Preisprofil für eine VDI-Klasse (z.B. "Standard", "GPU-Workstation", "Persistent").
@@ -59,7 +105,7 @@ class VDIBillingProfile(NetBoxModel):
 class VDIAssignment(NetBoxModel):
     """
     Verknüpft eine NetBox-VM mit Abrechnungsinformationen:
-    Kostenstelle, Abteilung, Preisprofil und optionalem Festpreis.
+    Kostenstelle, Preisprofil und optionalem Festpreis.
     """
     virtual_machine = models.OneToOneField(
         to=VirtualMachine,
@@ -75,14 +121,12 @@ class VDIAssignment(NetBoxModel):
         verbose_name='Preisprofil',
         help_text='Profil zur automatischen Kostenberechnung aus VM-Specs.',
     )
-    cost_center = models.CharField(
-        max_length=100, blank=True,
+    cost_center = models.ForeignKey(
+        to=CostCenter,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='assignments',
         verbose_name='Kostenstelle',
-        help_text='Kostenstellen-Nummer (z.B. 11554).',
-    )
-    department = models.CharField(
-        max_length=200, blank=True,
-        verbose_name='Abteilung',
     )
     assigned_to = models.CharField(
         max_length=200, blank=True,
@@ -103,7 +147,7 @@ class VDIAssignment(NetBoxModel):
         verbose_name_plural = 'VDI-Abrechnungszuordnungen'
 
     def __str__(self):
-        cc = self.cost_center or 'Keine Kostenstelle'
+        cc = str(self.cost_center) if self.cost_center else 'Keine Kostenstelle'
         return f'{self.virtual_machine.name} – {cc}'
 
     def get_absolute_url(self):

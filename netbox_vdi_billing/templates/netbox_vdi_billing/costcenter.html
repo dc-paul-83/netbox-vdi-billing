@@ -1,0 +1,107 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-5">
+    <div class="card">
+      <h5 class="card-header">Kostenstelle</h5>
+      <div class="card-body">
+        <table class="table table-sm">
+          <tr>
+            <th class="w-40">KST-Nummer</th>
+            <td class="fw-bold fs-5">{{ object.number }}</td>
+          </tr>
+          <tr>
+            <th>Bezeichnung</th>
+            <td>{{ object.name|default:"—" }}</td>
+          </tr>
+          <tr>
+            <th>Abteilung</th>
+            <td>{{ object.department|default:"—" }}</td>
+          </tr>
+          <tr>
+            <th>Anzahl VMs</th>
+            <td>{{ assignments|length }}</td>
+          </tr>
+          <tr>
+            <th>Kosten/Monat</th>
+            <td class="fw-bold text-primary">
+              {% with total=object.total_monthly %}
+                {% if total > 0 %}{{ total|floatformat:2 }} €{% else %}0,00 €{% endif %}
+              {% endwith %}
+            </td>
+          </tr>
+          <tr>
+            <th>Kosten/Jahr</th>
+            <td class="text-muted">
+              {% with total=object.total_monthly %}
+                {% if total > 0 %}{{ total|floatformat:2 }} €{% else %}—{% endif %}
+              {% endwith %}
+            </td>
+          </tr>
+        </table>
+        {% if object.description %}
+        <hr>
+        <div class="text-muted small">{{ object.description }}</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-7">
+    <div class="card">
+      <h5 class="card-header d-flex justify-content-between align-items-center">
+        Zugeordnete VMs ({{ assignments|length }})
+        <a href="{% url 'plugins:netbox_vdi_billing:bulk_assign' %}"
+           class="btn btn-sm btn-outline-primary">
+          <i class="mdi mdi-checkbox-multiple-marked"></i> Massen-Zuweisung
+        </a>
+      </h5>
+      <div class="card-body p-0">
+        {% if assignments %}
+        <table class="table table-sm mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>VM</th>
+              <th>Profil</th>
+              <th class="text-end">€/Monat</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for a in assignments %}
+            <tr>
+              <td><a href="{{ a.virtual_machine.get_absolute_url }}" class="fw-semibold">{{ a.virtual_machine.name }}</a></td>
+              <td>{% if a.profile %}<a href="{{ a.profile.get_absolute_url }}">{{ a.profile }}</a>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+              <td class="text-end {% if a.cost_monthly > 0 %}text-primary fw-semibold{% endif %}">
+                {{ a.cost_monthly|floatformat:2 }} €
+              </td>
+              <td class="text-end">
+                <a href="{% url 'plugins:netbox_vdi_billing:vdiassignment_edit' a.pk %}"
+                   class="btn btn-xs btn-outline-secondary">
+                  <i class="mdi mdi-pencil"></i>
+                </a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot class="table-light fw-bold">
+            <tr>
+              <td colspan="2" class="text-end">Summe</td>
+              <td class="text-end text-primary">{{ object.total_monthly|floatformat:2 }} €</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+        {% else %}
+        <div class="p-3 text-muted">
+          Noch keine VMs zugeordnet.
+          <a href="{% url 'plugins:netbox_vdi_billing:bulk_assign' %}">Jetzt zuordnen →</a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

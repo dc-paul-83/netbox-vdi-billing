@@ -1,6 +1,24 @@
 import django_tables2 as tables
 from netbox.tables import NetBoxTable, columns
-from .models import VDIBillingProfile, VDIAssignment
+from .models import CostCenter, VDIBillingProfile, VDIAssignment
+
+
+class CostCenterTable(NetBoxTable):
+    number = tables.Column(linkify=True, verbose_name='KST-Nummer')
+    name = tables.Column(verbose_name='Bezeichnung')
+    department = tables.Column(verbose_name='Abteilung')
+    vm_count = tables.Column(verbose_name='VMs', orderable=False)
+    total_monthly = tables.Column(verbose_name='€/Monat', orderable=False)
+
+    def render_total_monthly(self, value):
+        if value:
+            return f'{value:,.2f} €'.replace(',', '.')
+        return '0,00 €'
+
+    class Meta(NetBoxTable.Meta):
+        model = CostCenter
+        fields = ('pk', 'number', 'name', 'department', 'vm_count', 'total_monthly', 'actions')
+        default_columns = ('number', 'name', 'department', 'vm_count', 'total_monthly')
 
 
 class VDIBillingProfileTable(NetBoxTable):
@@ -21,9 +39,8 @@ class VDIBillingProfileTable(NetBoxTable):
 
 class VDIAssignmentTable(NetBoxTable):
     virtual_machine = tables.Column(linkify=True, verbose_name='VM')
+    cost_center = tables.Column(linkify=True, verbose_name='Kostenstelle')
     profile = tables.Column(linkify=True, verbose_name='Profil')
-    cost_center = tables.Column(verbose_name='Kostenstelle')
-    department = tables.Column(verbose_name='Abteilung')
     assigned_to = tables.Column(verbose_name='Zugewiesen an')
     cost_monthly = tables.Column(verbose_name='€/Monat', orderable=False)
     pricing_source = tables.Column(verbose_name='Preisquelle', orderable=False)
@@ -35,7 +52,7 @@ class VDIAssignmentTable(NetBoxTable):
 
     class Meta(NetBoxTable.Meta):
         model = VDIAssignment
-        fields = ('pk', 'virtual_machine', 'profile', 'cost_center', 'department',
+        fields = ('pk', 'virtual_machine', 'cost_center', 'profile',
                   'assigned_to', 'cost_monthly', 'pricing_source', 'actions')
-        default_columns = ('virtual_machine', 'cost_center', 'department',
+        default_columns = ('virtual_machine', 'cost_center',
                            'assigned_to', 'cost_monthly', 'pricing_source')
