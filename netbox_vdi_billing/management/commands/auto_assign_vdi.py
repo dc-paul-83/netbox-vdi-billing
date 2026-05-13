@@ -9,30 +9,29 @@ Kostenstelle wird aus einem konfigurierbaren NetBox-Feld gelesen:
   --cost-center-field custom:feld  → VM.custom_field_data['feld']
   --cost-center-field role         → VM.role.name
 
-Tag-basierter Workflow (empfohlen für vCenter-Sync):
-  # Nur VMs mit Tag "VDI" zuordnen; verwaiste Einträge entfernen
+Rollen-basierter Workflow (empfohlen bei netbox-sync mit vm_role_relation):
+  # Nur VMs mit Rolle "VDI" zuordnen; verwaiste Einträge entfernen
   python manage.py auto_assign_vdi \\
     --profile "Standard VDI" \\
     --cost-center-field tenant \\
-    --filter-tag VDI \\
-    --cleanup-untagged
+    --filter-role VDI \\
+    --cleanup
 
   # Dry-Run zuerst!
   python manage.py auto_assign_vdi \\
     --profile "Standard VDI" \\
     --cost-center-field tenant \\
-    --filter-tag VDI \\
-    --cleanup-untagged \\
+    --filter-role VDI \\
+    --cleanup \\
     --dry-run
 
 Für cron (täglich 02:00 Uhr):
   0 2 * * * /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py \\
       auto_assign_vdi --profile "Standard VDI" --cost-center-field tenant \\
-      --filter-tag VDI --cleanup-untagged >> /var/log/netbox/vdi_billing.log 2>&1
+      --filter-role VDI --cleanup >> /var/log/netbox/vdi_billing.log 2>&1
 """
 import re
 import csv
-import sys
 
 from django.core.management.base import BaseCommand, CommandError
 from virtualization.models import VirtualMachine
@@ -65,52 +64,53 @@ class Command(BaseCommand):
             help='NetBox-Feld für die Abteilung (optional, gleiche Syntax wie --cost-center-field)',
         )
         parser.add_argument(
-            '--filter-tag',
+            '--filter-role',
             default='',
-            metavar='TAG',
+            metavar='ROLE',
             help=(
-                'Nur VMs mit diesem NetBox-Tag verarbeiten, z.B. "VDI". '
-                'Empfohlen bei vCenter-Sync – so werden nur echte VDI-VMs erfasst.'
+                'Nur VMs mit dieser Rolle verarbeiten (Teil-Übereinstimmung), z.B. "VDI". '
+                'Empfohlen bei netbox-sync mit vm_role_relation = .* = VDI.'
             ),
         )
         parser.add_argument(
-            '--cleanup-untagged',
+            '--filter-tag',
+            default='',
+            metavar='TAG',
+            help='Nur VMs mit diesem NetBox-Tag verarbeiten, z.B. "VDI".',
+        )
+        parser.add_argument(
+            '--filter-cluster',
+            default='',
+            metavar='PATTERN',
+            help='Nur VMs in Clustern die diesem Regex entsprechen verarbeiten',
+        )
+        parser.add_argument(
+            '--cleanup',
             action='store_true',
             help=(
-                'Entfernt VDIAssignment-Einträge für VMs, die den Tag aus '
-                '--filter-tag nicht (mehr) haben. Setzt --filter-tag voraus. '
-                'Wichtig wenn VMs ihren VDI-Status verlieren oder umgewidmet werden.'
+                'Entfernt VDIAssignment-Einträge für VMs, die nicht mehr den '
+                'aktiven Filtern (--filter-role / --filter-tag / --filter-cluster) '
+                'entsprechen. Wichtig wenn VMs ihren VDI-Status verlieren oder '
+                'umgewidmet werden. Setzt mindestens einen Filter voraus.'
             ),
+        )
+        # Rückwärtskompatibilität
+        parser.add_argument(
+            '--cleanup-untagged',
+            action='store_true',
+            help='Veraltet – bitte --cleanup verwenden.',
         )
         parser.add_argument(
             '--gpu-cluster-pattern',
             default='',
             metavar='PATTERN',
-            help='Glob/Regex auf Cluster-Name für GPU-VMs, z.B. "GPU*" oder ".*gpu.*"',
+            help='Regex auf Cluster-Name für GPU-VMs, z.B. ".*gpu.*"',
         )
         parser.add_argument(
             '--gpu-profile',
             default='',
             metavar='NAME',
             help='Profil-Name für GPU-VMs (überschreibt --profile für GPU-Cluster)',
-        )
-        parser.add_argument(
-            '--filter-cluster',
-            default='',
-            metavar='PATTERN',
-            help='Nur VMs in Clustern die diesem Muster entsprechen verarbeiten',
-        )
-        parser.add_argument(
-            '--filter-role',
-            default='',
-            metavar='ROLE',
-            help='Nur VMs mit dieser Rolle verarbeiten',
-        )
-        parser.add_argument(
-            '--skip-existing',
-            action='store_true',
-            default=True,
-            help='Bereits zugeordnete VMs überspringen (Standard: an)',
         )
         parser.add_argument(
             '--overwrite',
@@ -125,7 +125,7 @@ class Command(BaseCommand):
         parser.add_argument(
             '--csv',
             metavar='FILE',
-            help='CSV-Datei importieren statt Auto-Mapping (Spalten: vm_name,cost_center,department,profile)',
+            help='CSV-Datei importieren statt Auto-Mapping (Spalten: vm_name;cost_center;department;profile)',
         )
 
     def handle(self, *args, **options):
@@ -151,9 +151,9 @@ class Command(BaseCommand):
         with f:
             reader = csv.DictReader(f, delimiter=';')
             for row in reader:
-                vm_name     = row.get('vm_name', '').strip()
-                cost_center = row.get('cost_center', '').strip()
-                department  = row.get('department', '').strip()
+                vm_name      = row.get('vm_name', '').strip()
+                cost_center  = row.get('cost_center', '').strip()
+                department   = row.get('department', '').strip()
                 profile_name = row.get('profile', '').strip()
 
                 if not vm_name:
@@ -211,14 +211,18 @@ class Command(BaseCommand):
         dept_field       = options.get('department_field', '')
         gpu_pattern      = options.get('gpu_cluster_pattern', '')
         gpu_profile_name = options.get('gpu_profile', '')
-        filter_cluster   = options.get('filter_cluster', '')
         filter_role      = options.get('filter_role', '')
         filter_tag       = options.get('filter_tag', '')
-        cleanup_untagged = options.get('cleanup_untagged', False)
+        filter_cluster   = options.get('filter_cluster', '')
         overwrite        = options.get('overwrite', False)
+        # --cleanup und --cleanup-untagged (veraltet) zusammenführen
+        do_cleanup       = options.get('cleanup', False) or options.get('cleanup_untagged', False)
 
-        if cleanup_untagged and not filter_tag and not filter_cluster:
-            raise CommandError('--cleanup-untagged erfordert --filter-tag oder --filter-cluster')
+        if do_cleanup and not any([filter_role, filter_tag, filter_cluster]):
+            raise CommandError(
+                '--cleanup erfordert mindestens einen Filter: '
+                '--filter-role, --filter-tag oder --filter-cluster'
+            )
 
         # Profile laden
         default_profile = None
@@ -235,30 +239,29 @@ class Command(BaseCommand):
             except VDIBillingProfile.DoesNotExist:
                 raise CommandError(f'GPU-Profil nicht gefunden: "{gpu_profile_name}"')
 
-        # ── Cleanup: Assignments für VMs entfernen die nicht mehr passen ────────
+        # ── Cleanup: Assignments für VMs entfernen die nicht mehr passen ─────
         cleaned = 0
-        if cleanup_untagged:
-            # Alle VMs bestimmen, die aktuell als "VDI" gelten würden
+        if do_cleanup:
             valid_qs = VirtualMachine.objects.all()
             reasons = []
+            if filter_role:
+                valid_qs = valid_qs.filter(role__name__icontains=filter_role)
+                reasons.append(f'Rolle "{filter_role}"')
             if filter_tag:
                 valid_qs = valid_qs.filter(tags__name=filter_tag)
                 reasons.append(f'Tag "{filter_tag}"')
             if filter_cluster:
                 valid_qs = valid_qs.filter(cluster__name__iregex=filter_cluster)
-                reasons.append(f'Cluster-Muster "{filter_cluster}"')
-            if filter_role:
-                valid_qs = valid_qs.filter(role__name__icontains=filter_role)
-                reasons.append(f'Rolle "{filter_role}"')
+                reasons.append(f'Cluster "{filter_cluster}"')
 
             valid_ids = set(valid_qs.values_list('pk', flat=True))
-            reason_str = ' + '.join(reasons) if reasons else 'aktuellen Filtern'
+            reason_str = ' + '.join(reasons)
 
-            orphan_assignments = VDIAssignment.objects.exclude(
+            orphans = VDIAssignment.objects.exclude(
                 virtual_machine_id__in=valid_ids
             ).select_related('virtual_machine')
 
-            for a in orphan_assignments:
+            for a in orphans:
                 self.stdout.write(
                     f'  {"[DRY]" if dry_run else "🗑"} Entfernt: {a.virtual_machine.name} '
                     f'(entspricht nicht mehr: {reason_str})'
@@ -275,20 +278,18 @@ class Command(BaseCommand):
             'tenant', 'cluster', 'role'
         ).prefetch_related('tags')
 
-        if filter_tag:
-            qs = qs.filter(tags__name=filter_tag)
         if filter_role:
             qs = qs.filter(role__name__icontains=filter_role)
+        if filter_tag:
+            qs = qs.filter(tags__name=filter_tag)
         if filter_cluster:
             qs = qs.filter(cluster__name__iregex=filter_cluster)
 
-        # Bereits zugeordnete VMs
         assigned_ids = set(
             VDIAssignment.objects.values_list('virtual_machine_id', flat=True)
         )
 
         created = updated = skipped = 0
-
         self.stdout.write(f'Verarbeite {qs.count()} VMs ...\n')
 
         for vm in qs:
@@ -298,11 +299,9 @@ class Command(BaseCommand):
                 skipped += 1
                 continue
 
-            # Kostenstelle bestimmen
             cost_center = self._get_field(vm, cc_field) or ''
             department  = self._get_field(vm, dept_field) or '' if dept_field else ''
 
-            # Profil bestimmen (GPU-Cluster hat Vorrang)
             profile = default_profile
             if gpu_pattern and vm.cluster:
                 if re.match(gpu_pattern, vm.cluster.name or '', re.IGNORECASE):

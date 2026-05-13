@@ -198,10 +198,12 @@ Optionen im Browser-Formular:
 | Standard-Preisprofil | Profil für alle normalen VMs |
 | Kostenstellen-Feld | `Tenant`, `Rolle`, `Cluster` oder `Custom-Field` |
 | Abteilungs-Feld | Optional – gleiche Quellen wie Kostenstelle |
-| GPU-Cluster-Muster | Regex, z.B. `.*gpu.*` – diese VMs bekommen das GPU-Profil |
-| GPU-Preisprofil | Anderes Profil für GPU-VMs |
-| Nur Cluster / Nur Rolle | Filter: nur bestimmte VMs verarbeiten |
+| **Nur Rolle** *(empfohlen)* | z.B. `VDI` — bei netbox-sync mit `vm_role_relation = .* = VDI` sofort nutzbar, kein Tag und kein vsphere-automation-sdk nötig |
+| Nur Tag | Alternative: Tag-basierter Filter |
+| Nur Cluster | Regex auf Cluster-Namen |
+| Verwaiste Einträge entfernen | Assignments löschen wenn VM nicht mehr dem Filter entspricht |
 | Bestehende überschreiben | Bereits zugewiesene VMs ebenfalls aktualisieren |
+| GPU-Cluster-Muster | Regex, z.B. `.*gpu.*` – diese VMs bekommen das GPU-Profil |
 
 > **Dry-Run:** Das Häkchen „Commit" weglassen → Skript zeigt was es tun würde, ohne zu speichern.
 
@@ -274,13 +276,10 @@ sudo /opt/netbox/venv/bin/python netbox/manage.py auto_assign_vdi \
 
 ### Empfohlene Vorgehensweise (Ersteinrichtung)
 
-1. **VDI-Tag anlegen** unter *Customization → Tags → Add* → Name: `VDI`
-2. **VMs taggen**: Alle VDI-VMs in NetBox mit dem Tag `VDI` versehen  
-   *(Bei vCenter-Sync kann das auch automatisch über die Sync-Konfiguration passieren)*
-3. **Preisprofile anlegen** unter *VDI Abrechnung → Preisprofile*
-4. **Dry-Run** ausführen (CLI oder Browser ohne „Commit") → Ausgabe prüfen
-5. **Lauf mit Commit** → alle getaggten VMs werden zugeordnet
-6. **Kostenstellen-Übersicht** kontrollieren
+1. **Preisprofile anlegen** unter *VDI Abrechnung → Preisprofile*
+2. **Dry-Run** ausführen → Ausgabe prüfen
+3. **Lauf mit Commit** → alle VMs werden zugeordnet
+4. **Kostenstellen-Übersicht** kontrollieren
 
 ---
 
@@ -300,10 +299,15 @@ Eintrag (täglich um 02:00 Uhr):
     auto_assign_vdi \
     --profile "Standard VDI" \
     --cost-center-field tenant \
-    --filter-tag VDI \
-    --cleanup-untagged \
+    --filter-role VDI \
+    --cleanup \
     >> /var/log/netbox/vdi_billing.log 2>&1
 ```
+
+> **Warum `--filter-role VDI`?**  
+> Bei netbox-sync mit `vm_role_relation = .* = VDI` bekommen alle VMs aus dem  
+> Horizon-vCenter automatisch die Rolle „VDI" in NetBox. Kein Tag-Sync,  
+> kein vsphere-automation-sdk nötig.
 
 Log-Verzeichnis anlegen (einmalig):
 ```bash
