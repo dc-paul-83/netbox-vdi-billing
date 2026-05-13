@@ -26,7 +26,7 @@ class CostCenterView(generic.ObjectView):
 
 class CostCenterListView(generic.ObjectListView):
     queryset = models.CostCenter.objects.annotate(
-        vm_count=Count('assignments')
+        assignment_count=Count('assignments')
     )
     table = tables.CostCenterTable
     filterset = filtersets.CostCenterFilterSet

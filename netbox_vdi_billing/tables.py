@@ -7,7 +7,7 @@ class CostCenterTable(NetBoxTable):
     number = tables.Column(linkify=True, verbose_name='KST-Nummer')
     name = tables.Column(verbose_name='Bezeichnung')
     department = tables.Column(verbose_name='Abteilung')
-    vm_count = tables.Column(verbose_name='VMs', orderable=False)
+    vm_count = tables.Column(accessor='assignment_count', verbose_name='VMs', orderable=True)
     total_monthly = tables.Column(verbose_name='€/Monat', orderable=False)
 
     def render_total_monthly(self, value):
