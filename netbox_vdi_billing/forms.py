@@ -1,5 +1,5 @@
 from django import forms
-from netbox.forms import NetBoxModelForm
+from netbox.forms import NetBoxModelForm, NetBoxModelBulkEditForm
 from utilities.forms.fields import DynamicModelChoiceField, DynamicModelMultipleChoiceField
 from virtualization.models import VirtualMachine
 from .models import CostCenter, VDIBillingProfile, VDIAssignment
@@ -47,6 +47,44 @@ class VDIAssignmentForm(NetBoxModelForm):
         widgets = {
             'notes': forms.Textarea(attrs={'rows': 3}),
         }
+
+
+class VDIAssignmentBulkEditForm(NetBoxModelBulkEditForm):
+    cost_center = DynamicModelChoiceField(
+        queryset=CostCenter.objects.all(),
+        required=False,
+        label='Kostenstelle',
+    )
+    profile = DynamicModelChoiceField(
+        queryset=VDIBillingProfile.objects.all(),
+        required=False,
+        label='Preisprofil',
+    )
+    assigned_to = forms.CharField(
+        max_length=200,
+        required=False,
+        label='Zugewiesen an',
+    )
+    cost_override = forms.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        required=False,
+        label='Festpreis (€/Monat)',
+    )
+
+    model = VDIAssignment
+    nullable_fields = ('cost_center', 'profile', 'assigned_to', 'cost_override')
+
+
+class CostCenterBulkEditForm(NetBoxModelBulkEditForm):
+    department = forms.CharField(
+        max_length=200,
+        required=False,
+        label='Abteilung',
+    )
+
+    model = CostCenter
+    nullable_fields = ('department',)
 
 
 class BulkAssignCostCenterForm(forms.Form):

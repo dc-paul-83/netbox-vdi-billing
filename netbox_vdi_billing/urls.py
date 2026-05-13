@@ -10,6 +10,8 @@ urlpatterns = [
     # ── Kostenstellen ─────────────────────────────────────────────────────────
     path('cost-centers/', views.CostCenterListView.as_view(), name='costcenter_list'),
     path('cost-centers/add/', views.CostCenterEditView.as_view(), name='costcenter_add'),
+    path('cost-centers/edit/', views.CostCenterBulkEditView.as_view(), name='costcenter_bulk_edit'),
+    path('cost-centers/delete/', views.CostCenterBulkDeleteView.as_view(), name='costcenter_bulk_delete'),
     path('cost-centers/<int:pk>/', views.CostCenterView.as_view(), name='costcenter'),
     path('cost-centers/<int:pk>/edit/', views.CostCenterEditView.as_view(), name='costcenter_edit'),
     path('cost-centers/<int:pk>/delete/', views.CostCenterDeleteView.as_view(), name='costcenter_delete'),
@@ -29,6 +31,8 @@ urlpatterns = [
     # ── Zuordnungen ───────────────────────────────────────────────────────────
     path('assignments/', views.VDIAssignmentListView.as_view(), name='vdiassignment_list'),
     path('assignments/add/', views.VDIAssignmentEditView.as_view(), name='vdiassignment_add'),
+    path('assignments/edit/', views.VDIAssignmentBulkEditView.as_view(), name='vdiassignment_bulk_edit'),
+    path('assignments/delete/', views.VDIAssignmentBulkDeleteView.as_view(), name='vdiassignment_bulk_delete'),
     path('assignments/<int:pk>/', views.VDIAssignmentView.as_view(), name='vdiassignment'),
     path('assignments/<int:pk>/edit/', views.VDIAssignmentEditView.as_view(), name='vdiassignment_edit'),
     path('assignments/<int:pk>/delete/', views.VDIAssignmentDeleteView.as_view(), name='vdiassignment_delete'),

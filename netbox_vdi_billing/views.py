@@ -101,6 +101,34 @@ class VDIAssignmentChangeLogView(nb_generic.ObjectChangeLogView):
     queryset = models.VDIAssignment.objects.all()
 
 
+class VDIAssignmentBulkEditView(generic.BulkEditView):
+    queryset = models.VDIAssignment.objects.select_related('virtual_machine', 'profile', 'cost_center')
+    filterset = filtersets.VDIAssignmentFilterSet
+    table = tables.VDIAssignmentTable
+    form = forms.VDIAssignmentBulkEditForm
+
+
+class VDIAssignmentBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.VDIAssignment.objects.select_related('virtual_machine', 'profile', 'cost_center')
+    filterset = filtersets.VDIAssignmentFilterSet
+    table = tables.VDIAssignmentTable
+
+
+# ─── CostCenter Bulk ─────────────────────────────────────────────────────────
+
+class CostCenterBulkEditView(generic.BulkEditView):
+    queryset = models.CostCenter.objects.all()
+    filterset = filtersets.CostCenterFilterSet
+    table = tables.CostCenterTable
+    form = forms.CostCenterBulkEditForm
+
+
+class CostCenterBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.CostCenter.objects.all()
+    filterset = filtersets.CostCenterFilterSet
+    table = tables.CostCenterTable
+
+
 # ─── Bulk Assign ─────────────────────────────────────────────────────────────
 
 class BulkAssignCostCenterView(LoginRequiredMixin, View):
