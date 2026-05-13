@@ -107,7 +107,9 @@ class VDIAssignment(NetBoxModel):
         return f'{self.virtual_machine.name} – {cc}'
 
     def get_absolute_url(self):
-        return reverse('plugins:netbox_vdi_billing:vdiassignment', args=[self.pk])
+        if self.pk:
+            return reverse('plugins:netbox_vdi_billing:vdiassignment', args=[self.pk])
+        return reverse('plugins:netbox_vdi_billing:vdiassignment_list')
 
     @property
     def cost_monthly(self) -> float:

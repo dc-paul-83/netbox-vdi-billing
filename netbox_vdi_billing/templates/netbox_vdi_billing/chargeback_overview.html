@@ -114,7 +114,7 @@
             {% if vm.cost_monthly > 0 %}{{ vm.cost_monthly|floatformat:2|add:"" }}{% with yearly=vm.cost_monthly %}—{% endwith %}{% endif %}
           </td>
           <td class="text-end">
-            <a href="{{ vm.assignment_url }}/edit/" class="btn btn-xs btn-outline-secondary">
+            <a href="{{ vm.assignment_edit_url }}" class="btn btn-xs btn-outline-secondary">
               <i class="mdi mdi-pencil"></i>
             </a>
           </td>

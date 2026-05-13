@@ -4,6 +4,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Count
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
+from django.urls import reverse
 from django.views import View
 from netbox.views import generic
 
@@ -95,6 +96,9 @@ def _build_chargeback_groups(assignments):
             'pricing_source': a.pricing_source,
             'vm_url': a.virtual_machine.get_absolute_url(),
             'assignment_url': a.get_absolute_url(),
+            'assignment_edit_url': reverse(
+                'plugins:netbox_vdi_billing:vdiassignment_edit', args=[a.pk]
+            ),
         })
         grp['total_monthly'] += cost
 
