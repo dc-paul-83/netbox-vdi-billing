@@ -50,15 +50,17 @@ class VDIAssignmentForm(NetBoxModelForm):
 
 
 class VDIAssignmentBulkEditForm(NetBoxModelBulkEditForm):
-    cost_center = DynamicModelChoiceField(
+    cost_center = forms.ModelChoiceField(
         queryset=CostCenter.objects.all(),
         required=False,
         label='Kostenstelle',
+        widget=forms.Select(attrs={'class': 'form-select'}),
     )
-    profile = DynamicModelChoiceField(
+    profile = forms.ModelChoiceField(
         queryset=VDIBillingProfile.objects.all(),
         required=False,
         label='Preisprofil',
+        widget=forms.Select(attrs={'class': 'form-select'}),
     )
     assigned_to = forms.CharField(
         max_length=200,
