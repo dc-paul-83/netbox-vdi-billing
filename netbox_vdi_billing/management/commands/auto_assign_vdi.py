@@ -85,6 +85,28 @@ class Command(BaseCommand):
             help='Nur VMs in Clustern die diesem Regex entsprechen verarbeiten',
         )
         parser.add_argument(
+            '--filter-name',
+            default='',
+            metavar='REGEX',
+            help='Nur VMs deren Name diesem Regex entspricht, z.B. "^atwie-vdi-.*"',
+        )
+        parser.add_argument(
+            '--exclude-tag',
+            default='',
+            metavar='TAG',
+            help=(
+                'VMs mit diesem Tag ausschließen, z.B. "Concurrent". '
+                'Nützlich wenn netbox-sync Ordner-Namen als Tags setzt '
+                '(vm_tag_source = parent_folder_1).'
+            ),
+        )
+        parser.add_argument(
+            '--exclude-name',
+            default='',
+            metavar='REGEX',
+            help='VMs ausschließen deren Name diesem Regex entspricht, z.B. ".*replica.*|.*template.*"',
+        )
+        parser.add_argument(
             '--cleanup',
             action='store_true',
             help=(
@@ -214,6 +236,9 @@ class Command(BaseCommand):
         filter_role      = options.get('filter_role', '')
         filter_tag       = options.get('filter_tag', '')
         filter_cluster   = options.get('filter_cluster', '')
+        filter_name      = options.get('filter_name', '')
+        exclude_tag      = options.get('exclude_tag', '')
+        exclude_name     = options.get('exclude_name', '')
         overwrite        = options.get('overwrite', False)
         # --cleanup und --cleanup-untagged (veraltet) zusammenführen
         do_cleanup       = options.get('cleanup', False) or options.get('cleanup_untagged', False)
@@ -284,6 +309,12 @@ class Command(BaseCommand):
             qs = qs.filter(tags__name=filter_tag)
         if filter_cluster:
             qs = qs.filter(cluster__name__iregex=filter_cluster)
+        if filter_name:
+            qs = qs.filter(name__iregex=filter_name)
+        if exclude_tag:
+            qs = qs.exclude(tags__name=exclude_tag)
+        if exclude_name:
+            qs = qs.exclude(name__iregex=exclude_name)
 
         assigned_ids = set(
             VDIAssignment.objects.values_list('virtual_machine_id', flat=True)

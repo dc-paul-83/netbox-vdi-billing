@@ -125,6 +125,30 @@ class AutoAssignVDI(Script):
         default='',
     )
 
+    filter_name = StringVar(
+        label='Nur VM-Name (Regex)',
+        description='Nur VMs verarbeiten deren Name diesem Regex entspricht, z.B. "^atwie-vdi-.*"',
+        required=False,
+        default='',
+    )
+
+    exclude_tag = StringVar(
+        label='Tag ausschließen',
+        description=(
+            'VMs mit diesem Tag überspringen, z.B. "Concurrent". '
+            'Funktioniert wenn netbox-sync vm_tag_source = parent_folder_1 gesetzt ist.'
+        ),
+        required=False,
+        default='',
+    )
+
+    exclude_name = StringVar(
+        label='VM-Name ausschließen (Regex)',
+        description='VMs überspringen deren Name diesem Regex entspricht, z.B. ".*replica.*|.*template.*"',
+        required=False,
+        default='',
+    )
+
     cleanup = BooleanVar(
         label='Verwaiste Einträge entfernen',
         description=(
@@ -166,6 +190,9 @@ class AutoAssignVDI(Script):
         filter_role     = data.get('filter_role', '').strip()
         filter_tag      = data.get('filter_tag', '').strip()
         filter_cluster  = data.get('filter_cluster', '').strip()
+        filter_name     = data.get('filter_name', '').strip()
+        exclude_tag     = data.get('exclude_tag', '').strip()
+        exclude_name    = data.get('exclude_name', '').strip()
         do_cleanup      = data['cleanup']
         overwrite       = data['overwrite']
 
@@ -229,6 +256,12 @@ class AutoAssignVDI(Script):
             qs = qs.filter(tags__name=filter_tag)
         if filter_cluster:
             qs = qs.filter(cluster__name__iregex=filter_cluster)
+        if filter_name:
+            qs = qs.filter(name__iregex=filter_name)
+        if exclude_tag:
+            qs = qs.exclude(tags__name=exclude_tag)
+        if exclude_name:
+            qs = qs.exclude(name__iregex=exclude_name)
 
         assigned_ids = set(
             VDIAssignment.objects.values_list('virtual_machine_id', flat=True)
