@@ -217,8 +217,8 @@ class Command(BaseCommand):
         cleanup_untagged = options.get('cleanup_untagged', False)
         overwrite        = options.get('overwrite', False)
 
-        if cleanup_untagged and not filter_tag:
-            raise CommandError('--cleanup-untagged erfordert --filter-tag')
+        if cleanup_untagged and not filter_tag and not filter_cluster:
+            raise CommandError('--cleanup-untagged erfordert --filter-tag oder --filter-cluster')
 
         # Profile laden
         default_profile = None
@@ -235,22 +235,33 @@ class Command(BaseCommand):
             except VDIBillingProfile.DoesNotExist:
                 raise CommandError(f'GPU-Profil nicht gefunden: "{gpu_profile_name}"')
 
-        # ── Cleanup: Assignments für VMs ohne Tag entfernen ───────────────────
+        # ── Cleanup: Assignments für VMs entfernen die nicht mehr passen ────────
         cleaned = 0
-        if cleanup_untagged and filter_tag:
-            # Alle VMs die KEINEN VDI-Tag haben, aber ein Assignment besitzen
-            tagged_vm_ids = set(
-                VirtualMachine.objects.filter(tags__name=filter_tag)
-                .values_list('pk', flat=True)
-            )
+        if cleanup_untagged:
+            # Alle VMs bestimmen, die aktuell als "VDI" gelten würden
+            valid_qs = VirtualMachine.objects.all()
+            reasons = []
+            if filter_tag:
+                valid_qs = valid_qs.filter(tags__name=filter_tag)
+                reasons.append(f'Tag "{filter_tag}"')
+            if filter_cluster:
+                valid_qs = valid_qs.filter(cluster__name__iregex=filter_cluster)
+                reasons.append(f'Cluster-Muster "{filter_cluster}"')
+            if filter_role:
+                valid_qs = valid_qs.filter(role__name__icontains=filter_role)
+                reasons.append(f'Rolle "{filter_role}"')
+
+            valid_ids = set(valid_qs.values_list('pk', flat=True))
+            reason_str = ' + '.join(reasons) if reasons else 'aktuellen Filtern'
+
             orphan_assignments = VDIAssignment.objects.exclude(
-                virtual_machine_id__in=tagged_vm_ids
+                virtual_machine_id__in=valid_ids
             ).select_related('virtual_machine')
 
             for a in orphan_assignments:
                 self.stdout.write(
                     f'  {"[DRY]" if dry_run else "🗑"} Entfernt: {a.virtual_machine.name} '
-                    f'(kein Tag "{filter_tag}" mehr)'
+                    f'(entspricht nicht mehr: {reason_str})'
                 )
                 if not dry_run:
                     a.delete()

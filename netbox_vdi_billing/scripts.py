@@ -172,26 +172,37 @@ class AutoAssignVDI(Script):
         if custom_cc:
             cc_field = f'custom:{custom_cc}'
 
-        if cleanup_untagged and not filter_tag:
-            self.log_failure('Verwaiste Einträge entfernen erfordert einen VDI-Tag.')
+        if cleanup_untagged and not filter_tag and not filter_cluster:
+            self.log_failure('Verwaiste Einträge entfernen erfordert einen VDI-Tag oder Cluster-Filter.')
             return
 
         cleaned = 0
 
-        # ── Cleanup: Assignments für VMs ohne Tag entfernen ───────────────────
-        if cleanup_untagged and filter_tag:
-            tagged_vm_ids = set(
-                VirtualMachine.objects.filter(tags__name=filter_tag)
-                .values_list('pk', flat=True)
-            )
+        # ── Cleanup: Assignments für VMs entfernen die nicht mehr passen ─────
+        if cleanup_untagged:
+            valid_qs = VirtualMachine.objects.all()
+            reasons = []
+            if filter_tag:
+                valid_qs = valid_qs.filter(tags__name=filter_tag)
+                reasons.append(f'Tag „{filter_tag}"')
+            if filter_cluster:
+                valid_qs = valid_qs.filter(cluster__name__iregex=filter_cluster)
+                reasons.append(f'Cluster „{filter_cluster}"')
+            if filter_role:
+                valid_qs = valid_qs.filter(role__name__icontains=filter_role)
+                reasons.append(f'Rolle „{filter_role}"')
+
+            valid_ids = set(valid_qs.values_list('pk', flat=True))
+            reason_str = ' + '.join(reasons) if reasons else 'aktuellen Filtern'
+
             orphans = VDIAssignment.objects.exclude(
-                virtual_machine_id__in=tagged_vm_ids
+                virtual_machine_id__in=valid_ids
             ).select_related('virtual_machine')
 
             for a in orphans:
                 self.log_warning(
                     f'Entfernt: <strong>{a.virtual_machine.name}</strong> '
-                    f'– kein Tag „{filter_tag}" mehr'
+                    f'– entspricht nicht mehr: {reason_str}'
                 )
                 if commit:
                     a.delete()
