@@ -153,6 +153,134 @@ sudo systemctl restart netbox netbox-rq
 
 ---
 
+## Massen-Zuweisung für viele VMs
+
+Bei ~200 aus vCenter synchronisierten VMs wäre manuelle Einzelzuordnung sehr aufwändig.  
+Es gibt zwei Wege zur automatischen Massen-Zuweisung:
+
+---
+
+### Weg A — Browser-UI (NetBox Custom Scripts)
+
+**Kein SSH notwendig.** Die Skripte laufen direkt im Browser unter  
+**Customization → Scripts**.
+
+#### Einmalige Einrichtung
+
+Beim ersten Mal muss man NetBox sagen, wo die Skripte liegen:
+
+```bash
+sudo nano /opt/netbox/netbox/netbox/configuration.py
+```
+
+Zeile hinzufügen:
+```python
+SCRIPTS_ROOT = '/opt/netbox/venv/lib/python3.x/site-packages/netbox_vdi_billing'
+```
+
+> **Tipp:** Den genauen Pfad findet man mit:  
+> `sudo find /opt/netbox/venv -name "scripts.py" -path "*/netbox_vdi_billing/*"`
+
+Danach NetBox neu starten:
+```bash
+sudo systemctl restart netbox netbox-rq
+```
+
+#### Verfügbare Skripte
+
+**1. VDI Auto-Zuweisung**  
+Liest Kostenstelle und Abteilung automatisch aus NetBox-Feldern.
+
+Optionen im Browser-Formular:
+
+| Feld | Beschreibung |
+|---|---|
+| Standard-Preisprofil | Profil für alle normalen VMs |
+| Kostenstellen-Feld | `Tenant`, `Rolle`, `Cluster` oder `Custom-Field` |
+| Abteilungs-Feld | Optional – gleiche Quellen wie Kostenstelle |
+| GPU-Cluster-Muster | Regex, z.B. `.*gpu.*` – diese VMs bekommen das GPU-Profil |
+| GPU-Preisprofil | Anderes Profil für GPU-VMs |
+| Nur Cluster / Nur Rolle | Filter: nur bestimmte VMs verarbeiten |
+| Bestehende überschreiben | Bereits zugewiesene VMs ebenfalls aktualisieren |
+
+> **Dry-Run:** Das Häkchen „Commit" weglassen → Skript zeigt was es tun würde, ohne zu speichern.
+
+---
+
+**2. VDI CSV-Import**  
+Kostenstelle und Profil per Tabelle setzen.
+
+CSV-Format (Semikolon-getrennt):
+```
+vm_name;cost_center;department;profile
+vdi-max-001;11554;Vertrieb;Standard VDI
+vdi-gpu-001;22100;Konstruktion;GPU-Workstation
+vdi-anna-003;11554;Vertrieb;Standard VDI
+```
+
+Den CSV-Inhalt einfach in das Textfeld im Browser einfügen, `Commit` anhaken → fertig.
+
+---
+
+### Weg B — CLI (Management Command)
+
+Wer SSH-Zugang hat, kann das Management-Command direkt ausführen:
+
+```bash
+cd /opt/netbox
+
+# Dry-Run: zeigt was gemacht würde, ohne zu speichern
+sudo /opt/netbox/venv/bin/python netbox/manage.py auto_assign_vdi --dry-run
+
+# Alle VMs, Tenant als Kostenstelle, Profil "Standard VDI"
+sudo /opt/netbox/venv/bin/python netbox/manage.py auto_assign_vdi \
+  --profile "Standard VDI" \
+  --cost-center-field tenant
+
+# GPU-Cluster extra
+sudo /opt/netbox/venv/bin/python netbox/manage.py auto_assign_vdi \
+  --profile "Standard VDI" \
+  --cost-center-field tenant \
+  --gpu-cluster-pattern ".*GPU.*" \
+  --gpu-profile "GPU-Workstation"
+
+# Nur bestimmte Cluster
+sudo /opt/netbox/venv/bin/python netbox/manage.py auto_assign_vdi \
+  --profile "Standard VDI" \
+  --cost-center-field tenant \
+  --filter-cluster "VDI-.*"
+
+# CSV-Datei importieren
+sudo /opt/netbox/venv/bin/python netbox/manage.py auto_assign_vdi \
+  --csv /tmp/vdi_zuordnung.csv
+```
+
+#### Alle Optionen
+
+| Option | Beschreibung | Standard |
+|---|---|---|
+| `--profile NAME` | Standard-Preisprofil | – |
+| `--cost-center-field` | `tenant`, `role`, `cluster`, `custom:feldname` | `tenant` |
+| `--department-field` | Gleiche Syntax wie oben, für Abteilung | – |
+| `--gpu-cluster-pattern` | Regex auf Cluster-Name | – |
+| `--gpu-profile NAME` | Profil für GPU-VMs | – |
+| `--filter-cluster` | Nur VMs in Clustern die diesem Regex entsprechen | – |
+| `--filter-role` | Nur VMs mit dieser Rolle | – |
+| `--overwrite` | Bestehende Zuordnungen überschreiben | aus |
+| `--dry-run` | Nur anzeigen, nichts speichern | aus |
+| `--csv FILE` | CSV-Datei importieren statt Auto-Mapping | – |
+
+---
+
+### Empfohlene Vorgehensweise (Ersteinrichtung)
+
+1. **Preisprofile anlegen** unter *VDI Abrechnung → Preisprofile*
+2. **Dry-Run** ausführen (CLI oder Browser ohne „Commit") → Ausgabe prüfen
+3. **Lauf mit Commit** → alle VMs werden zugeordnet
+4. **Kostenstellen-Übersicht** kontrollieren
+
+---
+
 ## Menüstruktur
 
 ```
