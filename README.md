@@ -274,10 +274,51 @@ sudo /opt/netbox/venv/bin/python netbox/manage.py auto_assign_vdi \
 
 ### Empfohlene Vorgehensweise (Ersteinrichtung)
 
-1. **Preisprofile anlegen** unter *VDI Abrechnung → Preisprofile*
-2. **Dry-Run** ausführen (CLI oder Browser ohne „Commit") → Ausgabe prüfen
-3. **Lauf mit Commit** → alle VMs werden zugeordnet
-4. **Kostenstellen-Übersicht** kontrollieren
+1. **VDI-Tag anlegen** unter *Customization → Tags → Add* → Name: `VDI`
+2. **VMs taggen**: Alle VDI-VMs in NetBox mit dem Tag `VDI` versehen  
+   *(Bei vCenter-Sync kann das auch automatisch über die Sync-Konfiguration passieren)*
+3. **Preisprofile anlegen** unter *VDI Abrechnung → Preisprofile*
+4. **Dry-Run** ausführen (CLI oder Browser ohne „Commit") → Ausgabe prüfen
+5. **Lauf mit Commit** → alle getaggten VMs werden zugeordnet
+6. **Kostenstellen-Übersicht** kontrollieren
+
+---
+
+### Automatischer Betrieb — Cron-Job (empfohlen)
+
+Da VMs aus vCenter synchronisiert werden und sich laufend ändern, empfiehlt sich
+ein täglicher Cron-Job. Er erstellt neue Einträge **und** entfernt automatisch
+Einträge für VMs, die den VDI-Tag verloren haben.
+
+```bash
+sudo crontab -e
+```
+
+Eintrag (täglich um 02:00 Uhr):
+```
+0 2 * * * /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py \
+    auto_assign_vdi \
+    --profile "Standard VDI" \
+    --cost-center-field tenant \
+    --filter-tag VDI \
+    --cleanup-untagged \
+    >> /var/log/netbox/vdi_billing.log 2>&1
+```
+
+Log-Verzeichnis anlegen (einmalig):
+```bash
+sudo mkdir -p /var/log/netbox
+sudo chown root:root /var/log/netbox
+```
+
+**Was der Cron-Job macht:**
+- ✅ Neue VMs (mit Tag `VDI`) → Assignment wird erstellt
+- ✅ Bereits zugeordnete VMs → werden übersprungen (kein ungewolltes Überschreiben)
+- ✅ VMs deren Tag entfernt wurde → Assignment wird gelöscht
+- ✅ Gelöschte VMs → Assignment wird automatisch per Datenbank-Cascade entfernt
+
+**Kostenstelle und Profil ändern sich nicht automatisch** — `--overwrite` ist
+bewusst nicht standardmäßig aktiv, damit manuelle Korrekturen erhalten bleiben.
 
 ---
 

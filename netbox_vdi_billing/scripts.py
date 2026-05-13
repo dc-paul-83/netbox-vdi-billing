@@ -5,7 +5,7 @@ Wird unter Customization → Scripts im NetBox-Browser-Interface ausgeführt.
 Kein SSH/CLI-Zugang erforderlich.
 
 Skripte:
-  AutoAssignVDI       – Automatisches Mapping aus NetBox-Feldern
+  AutoAssignVDI       – Automatisches Mapping aus NetBox-Feldern (mit Tag-Filter + Cleanup)
   ImportVDIFromCSV    – Manueller CSV-Import (Inhalt direkt ins Textfeld)
 """
 import re
@@ -39,19 +39,46 @@ def _get_field(vm, field_spec: str) -> str:
 
 class AutoAssignVDI(Script):
     """
-    Erstellt oder aktualisiert VDIAssignment-Einträge für alle VMs.
+    Erstellt oder aktualisiert VDIAssignment-Einträge für alle VMs mit einem
+    bestimmten NetBox-Tag.
 
-    Die Kostenstelle wird automatisch aus einem NetBox-Feld gelesen
-    (Tenant-Name, Rolle, Cluster oder Custom-Field).
-    Für GPU-Cluster kann ein abweichendes Profil gewählt werden.
+    Mit "Cleanup verwaister Einträge" werden Zuordnungen für VMs automatisch
+    entfernt, die den Tag nicht mehr tragen — z.B. weil eine VM umgewidmet
+    oder aus VDI-Betrieb genommen wurde.
+
+    Tipp: Dry-Run = Häkchen bei "Commit" weglassen.
     """
 
     class Meta:
         name        = 'VDI Auto-Zuweisung'
-        description = 'Erstellt VDIAssignment-Einträge automatisch aus NetBox-Feldern'
+        description = (
+            'Erstellt/aktualisiert VDIAssignment-Einträge anhand von NetBox-Feldern. '
+            'Optional: Einträge für VMs ohne VDI-Tag automatisch entfernen.'
+        )
         commit_default = False    # Nutzer muss "Commit" explizit anhaken
 
     # ── Formularfelder ────────────────────────────────────────────────────────
+
+    filter_tag = StringVar(
+        label='VDI-Tag',
+        description=(
+            'Nur VMs mit diesem NetBox-Tag verarbeiten (z.B. "VDI"). '
+            'Leer lassen = alle VMs. '
+            'Empfohlen bei vCenter-Sync!'
+        ),
+        required=False,
+        default='VDI',
+    )
+
+    cleanup_untagged = BooleanVar(
+        label='Verwaiste Einträge entfernen',
+        description=(
+            'Entfernt VDIAssignment-Einträge für VMs, die den oben '
+            'eingetragenen Tag nicht (mehr) haben. '
+            'Wichtig wenn VMs umgewidmet oder aus VDI genommen werden.'
+        ),
+        default=True,
+    )
 
     default_profile = ObjectVar(
         model=VDIBillingProfile,
@@ -64,17 +91,17 @@ class AutoAssignVDI(Script):
         label='Kostenstellen-Feld',
         description='Welches NetBox-Feld als Kostenstelle verwendet werden soll',
         choices=[
-            ('tenant',      'Tenant (Mandant)'),
-            ('role',        'Rolle'),
-            ('cluster',     'Cluster-Name'),
-            ('custom:cost_center', 'Custom-Field "cost_center"'),
+            ('tenant',               'Tenant (Mandant)'),
+            ('role',                 'Rolle'),
+            ('cluster',              'Cluster-Name'),
+            ('custom:cost_center',   'Custom-Field "cost_center"'),
         ],
         default='tenant',
     )
 
     custom_cost_center_field = StringVar(
         label='Custom-Field-Name (Kostenstelle)',
-        description='Nur wenn oben "custom:cost_center" nicht passt — eigenen Feldnamen eingeben, z.B. "kst"',
+        description='Nur ausfüllen wenn der Feldname von "cost_center" abweicht, z.B. "kst"',
         required=False,
         default='',
     )
@@ -83,11 +110,11 @@ class AutoAssignVDI(Script):
         label='Abteilungs-Feld',
         description='Welches NetBox-Feld als Abteilung verwendet werden soll (optional)',
         choices=[
-            ('',       '— keine —'),
-            ('tenant', 'Tenant (Mandant)'),
-            ('role',   'Rolle'),
-            ('cluster','Cluster-Name'),
-            ('custom:department', 'Custom-Field "department"'),
+            ('',                     '— keine —'),
+            ('tenant',               'Tenant (Mandant)'),
+            ('role',                 'Rolle'),
+            ('cluster',              'Cluster-Name'),
+            ('custom:department',    'Custom-Field "department"'),
         ],
         default='',
     )
@@ -122,29 +149,64 @@ class AutoAssignVDI(Script):
 
     overwrite = BooleanVar(
         label='Bestehende Zuordnungen überschreiben',
-        description='Bereits zugewiesene VMs werden ebenfalls aktualisiert',
+        description='Bereits zugewiesene VMs werden ebenfalls aktualisiert (z.B. wenn Profil geändert wurde)',
         default=False,
     )
 
     # ── Ausführung ────────────────────────────────────────────────────────────
 
     def run(self, data, commit):
-        default_profile   = data['default_profile']
-        cc_field          = data['cost_center_field']
-        dept_field        = data['department_field']
-        gpu_pattern       = data.get('gpu_cluster_pattern', '').strip()
-        gpu_profile       = data.get('gpu_profile')
-        filter_cluster    = data.get('filter_cluster', '').strip()
-        filter_role       = data.get('filter_role', '').strip()
-        overwrite         = data['overwrite']
+        default_profile  = data['default_profile']
+        cc_field         = data['cost_center_field']
+        dept_field       = data['department_field']
+        gpu_pattern      = data.get('gpu_cluster_pattern', '').strip()
+        gpu_profile      = data.get('gpu_profile')
+        filter_cluster   = data.get('filter_cluster', '').strip()
+        filter_role      = data.get('filter_role', '').strip()
+        filter_tag       = data.get('filter_tag', '').strip()
+        cleanup_untagged = data['cleanup_untagged']
+        overwrite        = data['overwrite']
 
         # Eigenen Custom-Field-Namen übernehmen, falls angegeben
         custom_cc = data.get('custom_cost_center_field', '').strip()
         if custom_cc:
             cc_field = f'custom:{custom_cc}'
 
-        # VM-Queryset
-        qs = VirtualMachine.objects.select_related('tenant', 'cluster', 'role')
+        if cleanup_untagged and not filter_tag:
+            self.log_failure('Verwaiste Einträge entfernen erfordert einen VDI-Tag.')
+            return
+
+        cleaned = 0
+
+        # ── Cleanup: Assignments für VMs ohne Tag entfernen ───────────────────
+        if cleanup_untagged and filter_tag:
+            tagged_vm_ids = set(
+                VirtualMachine.objects.filter(tags__name=filter_tag)
+                .values_list('pk', flat=True)
+            )
+            orphans = VDIAssignment.objects.exclude(
+                virtual_machine_id__in=tagged_vm_ids
+            ).select_related('virtual_machine')
+
+            for a in orphans:
+                self.log_warning(
+                    f'Entfernt: <strong>{a.virtual_machine.name}</strong> '
+                    f'– kein Tag „{filter_tag}" mehr'
+                )
+                if commit:
+                    a.delete()
+                cleaned += 1
+
+            if cleaned:
+                self.log_info(f'{cleaned} verwaiste Einträge {"entfernt" if commit else "gefunden (Dry-Run)"}.')
+
+        # ── VM-Queryset ───────────────────────────────────────────────────────
+        qs = VirtualMachine.objects.select_related(
+            'tenant', 'cluster', 'role'
+        ).prefetch_related('tags')
+
+        if filter_tag:
+            qs = qs.filter(tags__name=filter_tag)
         if filter_role:
             qs = qs.filter(role__name__icontains=filter_role)
         if filter_cluster:
@@ -195,10 +257,15 @@ class AutoAssignVDI(Script):
             else:
                 created += 1
 
-        summary = (
-            f'<strong>Ergebnis:</strong> '
-            f'{created} erstellt, {updated} aktualisiert, {skipped} übersprungen'
-        )
+        parts = [
+            f'{created} erstellt',
+            f'{updated} aktualisiert',
+            f'{skipped} übersprungen',
+        ]
+        if cleaned:
+            parts.append(f'{cleaned} entfernt')
+
+        summary = f'<strong>Ergebnis:</strong> {", ".join(parts)}'
         if not commit:
             summary += ' <em>(Dry-Run – nichts gespeichert)</em>'
 

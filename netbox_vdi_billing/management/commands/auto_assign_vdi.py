@@ -1,32 +1,34 @@
 """
 Management Command: auto_assign_vdi
 
-Erstellt VDIAssignment-Einträge für alle noch nicht zugeordneten VMs.
+Erstellt/aktualisiert VDIAssignment-Einträge für VMs und räumt veraltete
+Zuordnungen auf.
 
 Kostenstelle wird aus einem konfigurierbaren NetBox-Feld gelesen:
   --cost-center-field tenant       → VM.tenant.name
   --cost-center-field custom:feld  → VM.custom_field_data['feld']
   --cost-center-field role         → VM.role.name
 
-Profil kann per Name gesetzt werden; optional Cluster-Regex für
-automatische Profil-Auswahl (z.B. GPU-Cluster).
-
-Beispiele:
-  # Dry-Run: zeigt was gemacht würde, ohne zu speichern
-  python manage.py auto_assign_vdi --dry-run
-
-  # Alle VMs mit Tenant als Kostenstelle, Profil "Standard VDI"
-  python manage.py auto_assign_vdi \\
-    --profile "Standard VDI" \\
-    --cost-center-field tenant
-
-  # Nur VMs ohne bestehende Zuordnung, GPU-Cluster extra
+Tag-basierter Workflow (empfohlen für vCenter-Sync):
+  # Nur VMs mit Tag "VDI" zuordnen; verwaiste Einträge entfernen
   python manage.py auto_assign_vdi \\
     --profile "Standard VDI" \\
     --cost-center-field tenant \\
-    --gpu-cluster-pattern "GPU*" \\
-    --gpu-profile "GPU-Workstation" \\
-    --skip-existing
+    --filter-tag VDI \\
+    --cleanup-untagged
+
+  # Dry-Run zuerst!
+  python manage.py auto_assign_vdi \\
+    --profile "Standard VDI" \\
+    --cost-center-field tenant \\
+    --filter-tag VDI \\
+    --cleanup-untagged \\
+    --dry-run
+
+Für cron (täglich 02:00 Uhr):
+  0 2 * * * /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py \\
+      auto_assign_vdi --profile "Standard VDI" --cost-center-field tenant \\
+      --filter-tag VDI --cleanup-untagged >> /var/log/netbox/vdi_billing.log 2>&1
 """
 import re
 import csv
@@ -38,7 +40,7 @@ from netbox_vdi_billing.models import VDIBillingProfile, VDIAssignment
 
 
 class Command(BaseCommand):
-    help = 'Erstellt VDIAssignment-Einträge für alle noch nicht zugeordneten VMs'
+    help = 'Erstellt/aktualisiert VDIAssignment-Einträge und räumt verwaiste Zuordnungen auf'
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -52,7 +54,7 @@ class Command(BaseCommand):
             metavar='FIELD',
             help=(
                 'NetBox-Feld für die Kostenstelle. '
-                'Optionen: tenant, role, custom:<feldname> '
+                'Optionen: tenant, role, cluster, custom:<feldname> '
                 '(Standard: tenant)'
             ),
         )
@@ -61,6 +63,24 @@ class Command(BaseCommand):
             default='',
             metavar='FIELD',
             help='NetBox-Feld für die Abteilung (optional, gleiche Syntax wie --cost-center-field)',
+        )
+        parser.add_argument(
+            '--filter-tag',
+            default='',
+            metavar='TAG',
+            help=(
+                'Nur VMs mit diesem NetBox-Tag verarbeiten, z.B. "VDI". '
+                'Empfohlen bei vCenter-Sync – so werden nur echte VDI-VMs erfasst.'
+            ),
+        )
+        parser.add_argument(
+            '--cleanup-untagged',
+            action='store_true',
+            help=(
+                'Entfernt VDIAssignment-Einträge für VMs, die den Tag aus '
+                '--filter-tag nicht (mehr) haben. Setzt --filter-tag voraus. '
+                'Wichtig wenn VMs ihren VDI-Status verlieren oder umgewidmet werden.'
+            ),
         )
         parser.add_argument(
             '--gpu-cluster-pattern',
@@ -180,20 +200,25 @@ class Command(BaseCommand):
                 else:
                     created += 1
 
-        self._summary(created, updated, skipped, errors, dry_run)
+        self._summary(created, updated, skipped, 0, 0, dry_run)
 
     # ── Auto-Mapping ──────────────────────────────────────────────────────────
 
     def _handle_auto(self, options):
-        dry_run        = options['dry_run']
-        profile_name   = options.get('profile', '')
-        cc_field       = options['cost_center_field']
-        dept_field     = options.get('department_field', '')
-        gpu_pattern    = options.get('gpu_cluster_pattern', '')
+        dry_run          = options['dry_run']
+        profile_name     = options.get('profile', '')
+        cc_field         = options['cost_center_field']
+        dept_field       = options.get('department_field', '')
+        gpu_pattern      = options.get('gpu_cluster_pattern', '')
         gpu_profile_name = options.get('gpu_profile', '')
-        filter_cluster = options.get('filter_cluster', '')
-        filter_role    = options.get('filter_role', '')
-        overwrite      = options.get('overwrite', False)
+        filter_cluster   = options.get('filter_cluster', '')
+        filter_role      = options.get('filter_role', '')
+        filter_tag       = options.get('filter_tag', '')
+        cleanup_untagged = options.get('cleanup_untagged', False)
+        overwrite        = options.get('overwrite', False)
+
+        if cleanup_untagged and not filter_tag:
+            raise CommandError('--cleanup-untagged erfordert --filter-tag')
 
         # Profile laden
         default_profile = None
@@ -210,8 +235,37 @@ class Command(BaseCommand):
             except VDIBillingProfile.DoesNotExist:
                 raise CommandError(f'GPU-Profil nicht gefunden: "{gpu_profile_name}"')
 
-        # VM-Queryset aufbauen
-        qs = VirtualMachine.objects.select_related('tenant', 'cluster', 'role')
+        # ── Cleanup: Assignments für VMs ohne Tag entfernen ───────────────────
+        cleaned = 0
+        if cleanup_untagged and filter_tag:
+            # Alle VMs die KEINEN VDI-Tag haben, aber ein Assignment besitzen
+            tagged_vm_ids = set(
+                VirtualMachine.objects.filter(tags__name=filter_tag)
+                .values_list('pk', flat=True)
+            )
+            orphan_assignments = VDIAssignment.objects.exclude(
+                virtual_machine_id__in=tagged_vm_ids
+            ).select_related('virtual_machine')
+
+            for a in orphan_assignments:
+                self.stdout.write(
+                    f'  {"[DRY]" if dry_run else "🗑"} Entfernt: {a.virtual_machine.name} '
+                    f'(kein Tag "{filter_tag}" mehr)'
+                )
+                if not dry_run:
+                    a.delete()
+                cleaned += 1
+
+            if cleaned:
+                self.stdout.write('')
+
+        # ── VM-Queryset aufbauen ──────────────────────────────────────────────
+        qs = VirtualMachine.objects.select_related(
+            'tenant', 'cluster', 'role'
+        ).prefetch_related('tags')
+
+        if filter_tag:
+            qs = qs.filter(tags__name=filter_tag)
         if filter_role:
             qs = qs.filter(role__name__icontains=filter_role)
         if filter_cluster:
@@ -265,7 +319,7 @@ class Command(BaseCommand):
             else:
                 created += 1
 
-        self._summary(created, updated, skipped, 0, dry_run)
+        self._summary(created, updated, skipped, cleaned, 0, dry_run)
 
     # ── Hilfsmethoden ─────────────────────────────────────────────────────────
 
@@ -284,10 +338,18 @@ class Command(BaseCommand):
             return str(vm.custom_field_data.get(key) or '')
         return ''
 
-    def _summary(self, created, updated, skipped, errors, dry_run):
+    def _summary(self, created, updated, skipped, cleaned, errors, dry_run):
         self.stdout.write('')
         prefix = '[DRY RUN] ' if dry_run else ''
+        parts = [
+            f'{created} erstellt',
+            f'{updated} aktualisiert',
+            f'{skipped} übersprungen',
+        ]
+        if cleaned:
+            parts.append(f'{cleaned} entfernt')
+        if errors:
+            parts.append(f'{errors} Fehler')
         self.stdout.write(self.style.SUCCESS(
-            f'{prefix}Fertig: {created} erstellt, {updated} aktualisiert, '
-            f'{skipped} übersprungen, {errors} Fehler'
+            f'{prefix}Fertig: {", ".join(parts)}'
         ))
