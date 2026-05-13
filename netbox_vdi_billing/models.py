@@ -49,8 +49,8 @@ class VDIBillingProfile(NetBoxModel):
     def calculate_cost(self, vm: VirtualMachine) -> float:
         """Berechnet den Monatspreis für eine konkrete VM."""
         cost = float(self.base_price)
-        cost += float(self.vcpu_price) * (vm.vcpus or 0)
-        cost += float(self.ram_price_per_gb) * ((vm.memory or 0) / 1024.0)
+        cost += float(self.vcpu_price) * float(vm.vcpus or 0)
+        cost += float(self.ram_price_per_gb) * float(vm.memory or 0) / 1024.0
         if vm.custom_field_data.get('gpu'):
             cost += float(self.gpu_surcharge)
         return round(cost, 2)

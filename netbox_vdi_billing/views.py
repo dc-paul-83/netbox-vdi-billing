@@ -87,7 +87,7 @@ def _build_chargeback_groups(assignments):
         grp['vms'].append({
             'name': a.virtual_machine.name,
             'vcpus': a.virtual_machine.vcpus,
-            'memory_gb': round((a.virtual_machine.memory or 0) / 1024, 1),
+            'memory_gb': round(float(a.virtual_machine.memory or 0) / 1024, 1),
             'assigned_to': a.assigned_to,
             'profile': str(a.profile) if a.profile else None,
             'cost_override': float(a.cost_override) if a.cost_override is not None else None,
@@ -160,7 +160,7 @@ class ChargebackPrintView(LoginRequiredMixin, View):
             vms.append({
                 'name': a.virtual_machine.name,
                 'vcpus': a.virtual_machine.vcpus,
-                'memory_gb': round((a.virtual_machine.memory or 0) / 1024, 1),
+                'memory_gb': round(float(a.virtual_machine.memory or 0) / 1024, 1),
                 'assigned_to': a.assigned_to,
                 'pricing_source': a.pricing_source,
                 'cost_monthly': cost,
