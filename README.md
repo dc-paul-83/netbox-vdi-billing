@@ -158,6 +158,23 @@ sudo systemctl restart netbox netbox-rq
 Bei ~200 aus vCenter synchronisierten VMs wäre manuelle Einzelzuordnung sehr aufwändig.  
 Es gibt zwei Wege zur automatischen Massen-Zuweisung:
 
+### Voraussetzung: Preisprofile anlegen
+
+Bevor die Automatisierung läuft, müssen die Preisprofile in NetBox vorhanden sein.  
+**VDI Abrechnung → Preisprofile → Hinzufügen**
+
+> `--profile` ist optional. Wird es weggelassen, werden die VMs ohne Profil  
+> zugeordnet (Kosten = 0 €). Das Profil kann später per `--overwrite` nachgesetzt werden.
+
+**Unterschiedliche Profile je VM-Typ** sind möglich:
+
+| Szenario | Lösung |
+|---|---|
+| Alle VMs bekommen dasselbe Profil | `--profile "Standard VDI"` |
+| GPU-Cluster bekommt ein anderes Profil | `--gpu-cluster-pattern ".*GPU.*" --gpu-profile "GPU-Workstation"` |
+| Einzelne VMs brauchen Sonderpreise | Festpreis direkt in der Zuordnung eintragen (überschreibt Profil) |
+| Komplett individuelle Zuweisung | CSV-Import: jede VM bekommt ihr eigenes Profil |
+
 ---
 
 ### Weg A — Browser-UI (NetBox Custom Scripts)
@@ -226,34 +243,39 @@ Den CSV-Inhalt einfach in das Textfeld im Browser einfügen, `Commit` anhaken �
 
 ### Weg B — CLI (Management Command)
 
-Wer SSH-Zugang hat, kann das Management-Command direkt ausführen:
+Wer SSH-Zugang hat, kann das Management-Command direkt ausführen.  
+Alle Befehle werden von **`/opt/netbox`** aus gestartet:
 
 ```bash
-cd /opt/netbox
+# Schritt 1: Dry-Run — erst schauen, was gefunden wird (kein Profil nötig)
+sudo /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py auto_assign_vdi \
+  --filter-role VDI \
+  --cost-center-field tenant \
+  --dry-run
 
-# Dry-Run: zeigt was gemacht würde, ohne zu speichern
-sudo /opt/netbox/venv/bin/python netbox/manage.py auto_assign_vdi --dry-run
-
-# Alle VMs, Tenant als Kostenstelle, Profil "Standard VDI"
-sudo /opt/netbox/venv/bin/python netbox/manage.py auto_assign_vdi \
+# Schritt 2: Lauf mit Profil
+sudo /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py auto_assign_vdi \
+  --filter-role VDI \
   --profile "Standard VDI" \
   --cost-center-field tenant
 
-# GPU-Cluster extra
-sudo /opt/netbox/venv/bin/python netbox/manage.py auto_assign_vdi \
+# Mit GPU-Cluster (anderes Profil für GPU-VMs)
+sudo /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py auto_assign_vdi \
+  --filter-role VDI \
   --profile "Standard VDI" \
   --cost-center-field tenant \
   --gpu-cluster-pattern ".*GPU.*" \
   --gpu-profile "GPU-Workstation"
 
-# Nur bestimmte Cluster
-sudo /opt/netbox/venv/bin/python netbox/manage.py auto_assign_vdi \
+# Profil nachträglich auf alle VMs setzen (--overwrite)
+sudo /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py auto_assign_vdi \
+  --filter-role VDI \
   --profile "Standard VDI" \
   --cost-center-field tenant \
-  --filter-cluster "VDI-.*"
+  --overwrite
 
-# CSV-Datei importieren
-sudo /opt/netbox/venv/bin/python netbox/manage.py auto_assign_vdi \
+# CSV-Datei importieren (individuelle Profile pro VM)
+sudo /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py auto_assign_vdi \
   --csv /tmp/vdi_zuordnung.csv
 ```
 
@@ -261,14 +283,16 @@ sudo /opt/netbox/venv/bin/python netbox/manage.py auto_assign_vdi \
 
 | Option | Beschreibung | Standard |
 |---|---|---|
-| `--profile NAME` | Standard-Preisprofil | – |
+| `--profile NAME` | Standard-Preisprofil — muss in NetBox vorhanden sein | – |
+| `--filter-role ROLLE` | Nur VMs mit dieser Rolle, z.B. `VDI` | – |
+| `--filter-tag TAG` | Nur VMs mit diesem Tag | – |
+| `--filter-cluster REGEX` | Nur VMs in Clustern die diesem Regex entsprechen | – |
+| `--cleanup` | Assignments entfernen wenn VM nicht mehr dem Filter entspricht | aus |
 | `--cost-center-field` | `tenant`, `role`, `cluster`, `custom:feldname` | `tenant` |
-| `--department-field` | Gleiche Syntax wie oben, für Abteilung | – |
-| `--gpu-cluster-pattern` | Regex auf Cluster-Name | – |
-| `--gpu-profile NAME` | Profil für GPU-VMs | – |
-| `--filter-cluster` | Nur VMs in Clustern die diesem Regex entsprechen | – |
-| `--filter-role` | Nur VMs mit dieser Rolle | – |
-| `--overwrite` | Bestehende Zuordnungen überschreiben | aus |
+| `--department-field` | Gleiche Syntax, für Abteilung | – |
+| `--gpu-cluster-pattern` | Regex auf Cluster-Name für GPU-VMs | – |
+| `--gpu-profile NAME` | Abweichendes Profil für GPU-VMs | – |
+| `--overwrite` | Bestehende Zuordnungen aktualisieren | aus |
 | `--dry-run` | Nur anzeigen, nichts speichern | aus |
 | `--csv FILE` | CSV-Datei importieren statt Auto-Mapping | – |
 
