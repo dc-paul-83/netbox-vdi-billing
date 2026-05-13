@@ -118,6 +118,62 @@ Custom Field in NetBox anlegen:
 
 ---
 
+## Horizon API – Automatischer Persistent-Tag
+
+Statt manueller Tags oder Ausnahmelisten fragt das Plugin die **Omnissa Horizon REST API** direkt ab und setzt automatisch den Tag `VDI-Persistent` auf alle VMs die in einem **DEDICATED Pool** (= persistent) sind. Concurrent, Instant-Clone und Template-VMs bekommen den Tag nie.
+
+### Einrichtung
+
+**1. Zugangsdaten in `configuration.py` eintragen:**
+
+```python
+PLUGINS_CONFIG = {
+    'netbox_vdi_billing': {
+        'horizon_instances': [
+            {
+                'host':     'deopp-vc-horizon.megroup.global',
+                'domain':   'MEGROUP',
+                'username': 'svc-netbox',
+                'password': 'geheim',
+            },
+            {
+                'host':     'desto-vca-p01.megroup.global',
+                'domain':   'MEGROUP',
+                'username': 'svc-netbox',
+                'password': 'geheim',
+            },
+        ],
+        'persistent_tag': 'VDI-Persistent',   # Standard, kann angepasst werden
+    }
+}
+```
+
+**2. Dry-Run testen:**
+```bash
+sudo /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py sync_horizon_tags --dry-run
+```
+
+**3. Echter Lauf:**
+```bash
+sudo /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py sync_horizon_tags
+```
+
+**4. Cron – täglich vor dem Billing-Lauf:**
+```
+# 01:30 Horizon Tags sync, 02:00 Billing
+30 1 * * * /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py sync_horizon_tags >> /var/log/netbox/vdi_billing.log 2>&1
+0  2 * * * /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py auto_assign_vdi --filter-tag VDI-Persistent --cost-center-field tenant --cleanup >> /var/log/netbox/vdi_billing.log 2>&1
+```
+
+**Was das Skript macht:**
+- ✅ VM in persistentem Horizon-Pool → Tag `VDI-Persistent` wird gesetzt
+- ✅ VM wechselt zu Floating/Concurrent → Tag wird entfernt
+- ✅ VM wird in Horizon gelöscht → NetBox-VM verliert Tag (Assignment beim nächsten Billing-Lauf entfernt via `--cleanup`)
+- ✅ Kein externes Paket nötig – nutzt nur Python-Standard-`urllib`
+- ✅ Self-signed Zertifikate werden akzeptiert
+
+---
+
 ## Installation (NetBox 4.5.x)
 
 ```bash
