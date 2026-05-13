@@ -7,8 +7,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('virtualization', '0001_squashed'),
-        ('extras', '0001_squashed'),
+        ('virtualization', '0001_squashed_0022'),
     ]
 
     operations = [
