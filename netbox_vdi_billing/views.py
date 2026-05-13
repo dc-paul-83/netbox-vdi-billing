@@ -107,11 +107,17 @@ class VDIAssignmentBulkEditView(generic.BulkEditView):
     table = tables.VDIAssignmentTable
     form = forms.VDIAssignmentBulkEditForm
 
+    def get_return_url(self, request, obj=None):
+        return reverse('plugins:netbox_vdi_billing:vdiassignment_list')
+
 
 class VDIAssignmentBulkDeleteView(generic.BulkDeleteView):
     queryset = models.VDIAssignment.objects.select_related('virtual_machine', 'profile', 'cost_center')
     filterset = filtersets.VDIAssignmentFilterSet
     table = tables.VDIAssignmentTable
+
+    def get_return_url(self, request, obj=None):
+        return reverse('plugins:netbox_vdi_billing:vdiassignment_list')
 
 
 # ─── CostCenter Bulk ─────────────────────────────────────────────────────────
@@ -122,11 +128,17 @@ class CostCenterBulkEditView(generic.BulkEditView):
     table = tables.CostCenterTable
     form = forms.CostCenterBulkEditForm
 
+    def get_return_url(self, request, obj=None):
+        return reverse('plugins:netbox_vdi_billing:costcenter_list')
+
 
 class CostCenterBulkDeleteView(generic.BulkDeleteView):
     queryset = models.CostCenter.objects.all()
     filterset = filtersets.CostCenterFilterSet
     table = tables.CostCenterTable
+
+    def get_return_url(self, request, obj=None):
+        return reverse('plugins:netbox_vdi_billing:costcenter_list')
 
 
 # ─── Bulk Assign ─────────────────────────────────────────────────────────────
