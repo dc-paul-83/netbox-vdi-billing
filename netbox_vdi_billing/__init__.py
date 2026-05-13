@@ -8,7 +8,7 @@ class VDIBillingConfig(PluginConfig):
     version = '1.0.0'
     author = 'IT'
     base_url = 'vdi-billing'
-    min_version = '4.0.0'
+    min_version = '4.5.0'
     default_settings = {}
 
     def ready(self):

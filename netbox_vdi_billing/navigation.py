@@ -1,4 +1,5 @@
 from netbox.plugins.navigation import PluginMenu, PluginMenuButton, PluginMenuItem
+from netbox.choices import ButtonColorChoices
 
 menu = PluginMenu(
     label='VDI Abrechnung',
@@ -15,7 +16,7 @@ menu = PluginMenu(
                             link='plugins:netbox_vdi_billing:vdiassignment_add',
                             title='VM zuordnen',
                             icon_class='mdi mdi-plus-thick',
-                            color='green',
+                            color=ButtonColorChoices.GREEN,
                             permissions=['netbox_vdi_billing.add_vdiassignment'],
                         ),
                     ),
@@ -39,7 +40,7 @@ menu = PluginMenu(
                             link='plugins:netbox_vdi_billing:vdibillingprofile_add',
                             title='Profil hinzufügen',
                             icon_class='mdi mdi-plus-thick',
-                            color='green',
+                            color=ButtonColorChoices.GREEN,
                             permissions=['netbox_vdi_billing.add_vdibillingprofile'],
                         ),
                     ),
