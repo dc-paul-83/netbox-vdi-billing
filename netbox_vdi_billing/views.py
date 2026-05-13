@@ -1,4 +1,5 @@
 from collections import defaultdict
+from netbox.views import generic as nb_generic
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Count
 from django.http import HttpResponse
@@ -35,6 +36,10 @@ class VDIBillingProfileDeleteView(generic.ObjectDeleteView):
     queryset = models.VDIBillingProfile.objects.all()
 
 
+class VDIBillingProfileChangeLogView(nb_generic.ObjectChangeLogView):
+    queryset = models.VDIBillingProfile.objects.all()
+
+
 # ─── VDIAssignment CRUD ───────────────────────────────────────────────────────
 
 class VDIAssignmentView(generic.ObjectView):
@@ -52,6 +57,10 @@ class VDIAssignmentEditView(generic.ObjectEditView):
 
 
 class VDIAssignmentDeleteView(generic.ObjectDeleteView):
+    queryset = models.VDIAssignment.objects.all()
+
+
+class VDIAssignmentChangeLogView(nb_generic.ObjectChangeLogView):
     queryset = models.VDIAssignment.objects.all()
 
 

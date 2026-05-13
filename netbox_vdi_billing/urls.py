@@ -13,6 +13,7 @@ urlpatterns = [
     path('profiles/<int:pk>/', views.VDIBillingProfileView.as_view(), name='vdibillingprofile'),
     path('profiles/<int:pk>/edit/', views.VDIBillingProfileEditView.as_view(), name='vdibillingprofile_edit'),
     path('profiles/<int:pk>/delete/', views.VDIBillingProfileDeleteView.as_view(), name='vdibillingprofile_delete'),
+    path('profiles/<int:pk>/changelog/', views.VDIBillingProfileChangeLogView.as_view(), name='vdibillingprofile_changelog'),
 
     # ── Zuordnungen ───────────────────────────────────────────────────────────
     path('assignments/', views.VDIAssignmentListView.as_view(), name='vdiassignment_list'),
@@ -20,4 +21,5 @@ urlpatterns = [
     path('assignments/<int:pk>/', views.VDIAssignmentView.as_view(), name='vdiassignment'),
     path('assignments/<int:pk>/edit/', views.VDIAssignmentEditView.as_view(), name='vdiassignment_edit'),
     path('assignments/<int:pk>/delete/', views.VDIAssignmentDeleteView.as_view(), name='vdiassignment_delete'),
+    path('assignments/<int:pk>/changelog/', views.VDIAssignmentChangeLogView.as_view(), name='vdiassignment_changelog'),
 ]
