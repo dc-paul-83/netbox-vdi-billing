@@ -24,6 +24,8 @@ class VDIBillingConfig(PluginConfig):
         #   'persistent_tag': 'VDI-Persistent',
         'horizon_instances': [],
         'persistent_tag': 'VDI-Persistent',
+        'gpu_tag': 'VDI-GPU',
+        'gpu_pool_pattern': r'nvidia|vgpu|gpu|grid',
     }
 
     def ready(self):

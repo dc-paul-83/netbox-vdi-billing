@@ -97,7 +97,11 @@ class VDIBillingProfile(NetBoxModel):
         cost = float(self.base_price)
         cost += float(self.vcpu_price) * float(vm.vcpus or 0)
         cost += float(self.ram_price_per_gb) * float(vm.memory or 0) / 1024.0
-        if vm.custom_field_data.get('gpu'):
+        # GPU-Erkennung: Custom Field "gpu" ODER Tag "VDI-GPU"
+        has_gpu = bool(vm.custom_field_data.get('gpu'))
+        if not has_gpu and float(self.gpu_surcharge) > 0:
+            has_gpu = vm.tags.filter(name='VDI-GPU').exists()
+        if has_gpu:
             cost += float(self.gpu_surcharge)
         return round(cost, 2)
 
