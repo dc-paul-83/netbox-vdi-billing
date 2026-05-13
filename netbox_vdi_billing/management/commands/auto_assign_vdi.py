@@ -92,12 +92,13 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             '--exclude-tag',
-            default='',
+            action='append',
+            default=[],
             metavar='TAG',
             help=(
-                'VMs mit diesem Tag ausschließen, z.B. "Concurrent". '
-                'Nützlich wenn netbox-sync Ordner-Namen als Tags setzt '
-                '(vm_tag_source = parent_folder_1).'
+                'VMs mit diesem Tag ausschließen. Mehrfach verwendbar: '
+                '--exclude-tag Concurrent --exclude-tag "Horizon-DE". '
+                'Nützlich mit vm_tag_source = parent_folder_1 in netbox-sync.'
             ),
         )
         parser.add_argument(
@@ -237,7 +238,7 @@ class Command(BaseCommand):
         filter_tag       = options.get('filter_tag', '')
         filter_cluster   = options.get('filter_cluster', '')
         filter_name      = options.get('filter_name', '')
-        exclude_tag      = options.get('exclude_tag', '')
+        exclude_tags     = options.get('exclude_tag', [])
         exclude_name     = options.get('exclude_name', '')
         overwrite        = options.get('overwrite', False)
         # --cleanup und --cleanup-untagged (veraltet) zusammenführen
@@ -279,8 +280,15 @@ class Command(BaseCommand):
                 valid_qs = valid_qs.filter(cluster__name__iregex=filter_cluster)
                 reasons.append(f'Cluster "{filter_cluster}"')
 
+            for tag in exclude_tags:
+                valid_qs = valid_qs.exclude(tags__name=tag)
+            if filter_name:
+                valid_qs = valid_qs.filter(name__iregex=filter_name)
+            if exclude_name:
+                valid_qs = valid_qs.exclude(name__iregex=exclude_name)
+
             valid_ids = set(valid_qs.values_list('pk', flat=True))
-            reason_str = ' + '.join(reasons)
+            reason_str = ' + '.join(reasons) if reasons else 'aktiven Filtern'
 
             orphans = VDIAssignment.objects.exclude(
                 virtual_machine_id__in=valid_ids
@@ -311,8 +319,8 @@ class Command(BaseCommand):
             qs = qs.filter(cluster__name__iregex=filter_cluster)
         if filter_name:
             qs = qs.filter(name__iregex=filter_name)
-        if exclude_tag:
-            qs = qs.exclude(tags__name=exclude_tag)
+        for tag in exclude_tags:
+            qs = qs.exclude(tags__name=tag)
         if exclude_name:
             qs = qs.exclude(name__iregex=exclude_name)
 

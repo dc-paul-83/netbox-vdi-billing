@@ -133,9 +133,9 @@ class AutoAssignVDI(Script):
     )
 
     exclude_tag = StringVar(
-        label='Tag ausschließen',
+        label='Tags ausschließen (kommagetrennt)',
         description=(
-            'VMs mit diesem Tag überspringen, z.B. "Concurrent". '
+            'VMs mit diesen Tags überspringen, z.B. "Concurrent,Horizon-DE,Horizon-CH". '
             'Funktioniert wenn netbox-sync vm_tag_source = parent_folder_1 gesetzt ist.'
         ),
         required=False,
@@ -258,8 +258,8 @@ class AutoAssignVDI(Script):
             qs = qs.filter(cluster__name__iregex=filter_cluster)
         if filter_name:
             qs = qs.filter(name__iregex=filter_name)
-        if exclude_tag:
-            qs = qs.exclude(tags__name=exclude_tag)
+        for tag in [t.strip() for t in exclude_tag.split(',') if t.strip()]:
+            qs = qs.exclude(tags__name=tag)
         if exclude_name:
             qs = qs.exclude(name__iregex=exclude_name)
 
