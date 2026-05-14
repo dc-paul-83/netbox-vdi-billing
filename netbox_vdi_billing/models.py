@@ -137,6 +137,11 @@ class VDIAssignment(NetBoxModel):
         verbose_name='Zugewiesen an',
         help_text='Name des Benutzers oder Teams.',
     )
+    email = models.EmailField(
+        blank=True,
+        verbose_name='E-Mail',
+        help_text='E-Mail-Adresse des Benutzers (wird aus AD synchronisiert).',
+    )
     cost_override = models.DecimalField(
         max_digits=10, decimal_places=2,
         null=True, blank=True,

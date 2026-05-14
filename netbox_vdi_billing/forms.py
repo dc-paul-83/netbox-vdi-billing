@@ -43,7 +43,7 @@ class VDIAssignmentForm(NetBoxModelForm):
     class Meta:
         model = VDIAssignment
         fields = ('virtual_machine', 'profile', 'cost_center',
-                  'assigned_to', 'cost_override', 'notes', 'tags')
+                  'assigned_to', 'email', 'cost_override', 'notes', 'tags')
         widgets = {
             'notes': forms.Textarea(attrs={'rows': 3}),
         }
@@ -67,6 +67,10 @@ class VDIAssignmentBulkEditForm(NetBoxModelBulkEditForm):
         required=False,
         label='Zugewiesen an',
     )
+    email = forms.EmailField(
+        required=False,
+        label='E-Mail',
+    )
     cost_override = forms.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -75,7 +79,7 @@ class VDIAssignmentBulkEditForm(NetBoxModelBulkEditForm):
     )
 
     model = VDIAssignment
-    nullable_fields = ('cost_center', 'profile', 'assigned_to', 'cost_override')
+    nullable_fields = ('cost_center', 'profile', 'assigned_to', 'email', 'cost_override')
 
 
 class CostCenterBulkEditForm(NetBoxModelBulkEditForm):

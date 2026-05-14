@@ -42,6 +42,7 @@ class VDIAssignmentTable(NetBoxTable):
     cost_center = tables.Column(linkify=True, verbose_name='Kostenstelle')
     profile = tables.Column(linkify=True, verbose_name='Profil')
     assigned_to = tables.Column(verbose_name='Zugewiesen an')
+    email = tables.Column(verbose_name='E-Mail')
     cost_monthly = tables.Column(verbose_name='€/Monat', orderable=False)
     pricing_source = tables.Column(verbose_name='Preisquelle', orderable=False)
 
@@ -53,6 +54,6 @@ class VDIAssignmentTable(NetBoxTable):
     class Meta(NetBoxTable.Meta):
         model = VDIAssignment
         fields = ('pk', 'virtual_machine', 'cost_center', 'profile',
-                  'assigned_to', 'cost_monthly', 'pricing_source', 'actions')
+                  'assigned_to', 'email', 'cost_monthly', 'pricing_source', 'actions')
         default_columns = ('virtual_machine', 'cost_center',
-                           'assigned_to', 'cost_monthly', 'pricing_source')
+                           'assigned_to', 'email', 'cost_monthly', 'pricing_source')

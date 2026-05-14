@@ -34,7 +34,14 @@
       </tr>
       <tr>
         <th>Zugewiesen an</th>
-        <td>{{ assignment.assigned_to|default:"—" }}</td>
+        <td>
+          {{ assignment.assigned_to|default:"—" }}
+          {% if assignment.email %}
+            <a href="mailto:{{ assignment.email }}" class="ms-1 text-muted small">
+              <i class="mdi mdi-email-outline"></i> {{ assignment.email }}
+            </a>
+          {% endif %}
+        </td>
       </tr>
       <tr>
         <th>Preisprofil</th>
