@@ -242,11 +242,12 @@ sudo mkdir -p /var/log/netbox
 
 | View | URL | Notes |
 |---|---|---|
-| Chargeback Overview | `/plugins/vdi-billing/` | KPI cards + cost center breakdown; **CSV export** button |
+| Chargeback Overview | `/plugins/vdi-billing/` | KPI cards + cost center breakdown; **CSV export** button (if billing enabled) |
 | Cost Centers | `/plugins/vdi-billing/cost-centers/` | List, create, bulk edit/delete |
 | Bulk Assignment | `/plugins/vdi-billing/bulk-assign/` | Assign multiple VMs at once |
 | Price Profiles | `/plugins/vdi-billing/profiles/` | List, create, edit |
 | All Assignments | `/plugins/vdi-billing/assignments/` | GPU badge column; bulk edit/delete |
+| **Plugin Settings** | `/plugins/vdi-billing/settings/` | Toggle: Billing, GPU badge, E-Mail display |
 
 ### PDF Export
 
@@ -260,6 +261,34 @@ Each cost center row in the Chargeback Overview offers two PDF buttons:
 Both PDFs can also be downloaded directly via `?format=pdf` and `?format=pdf&hide_prices=1`.
 
 The plugin also adds a **VDI Billing** panel to every Virtual Machine detail page showing cost center, assigned user, e-mail, price profile and monthly/yearly costs.
+
+---
+
+## Plugin Settings
+
+Access plugin settings at **VDI Abrechnung → Konfiguration → Plugin-Einstellungen** or directly at `/plugins/vdi-billing/settings/`.
+
+### Available Options
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| **Kostenberechnung aktivieren** | ✅ ON | Show cost calculations in overview, assignments, and PDFs. When disabled, the plugin functions as a pure inventory/assignment tool without billing. |
+| **GPU-Badge anzeigen** | ✅ ON | Display GPU status badge in assignment list (visual indicator for VMs with GPU support). |
+| **E-Mail-Adressen anzeigen** | ✅ ON | Show email column in assignments (requires sync via `sync_vdi_emails` command). |
+
+### Use Cases
+
+**Billing Disabled** — Use the plugin purely for VDI inventory and cost center assignment:
+- No pricing columns or calculations shown
+- No CSV export button
+- No PDF export buttons
+- Perfect for organizations that manage billing externally
+
+**Billing Enabled** (default) — Full billing dashboard:
+- All cost calculations and summaries
+- Per-VM cost breakdown
+- CSV and PDF exports (with customer/internal views)
+- Monthly and yearly cost projections
 
 ---
 

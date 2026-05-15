@@ -8,16 +8,11 @@
   <div class="col">
     <h1 class="page-header d-flex justify-content-between align-items-center">
       <span><i class="mdi mdi-currency-eur"></i> VDI Kostenstellen-Übersicht</span>
-      <div class="d-flex gap-2">
-        {% if plugin_settings.billing_enabled %}
-        <a href="?format=csv" class="btn btn-sm btn-outline-success">
-          <i class="mdi mdi-file-delimited-outline"></i> CSV Export
-        </a>
-        {% endif %}
-        <a href="{% url 'plugins:netbox_vdi_billing:plugin_settings' %}" class="btn btn-sm btn-outline-secondary">
-          <i class="mdi mdi-cog"></i> Einstellungen
-        </a>
-      </div>
+      {% if plugin_settings.billing_enabled %}
+      <a href="?format=csv" class="btn btn-sm btn-outline-success">
+        <i class="mdi mdi-file-delimited-outline"></i> CSV Export
+      </a>
+      {% endif %}
     </h1>
   </div>
 </div>

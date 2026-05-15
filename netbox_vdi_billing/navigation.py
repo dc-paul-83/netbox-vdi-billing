@@ -66,6 +66,11 @@ menu = PluginMenu(
                         ),
                     ),
                 ),
+                PluginMenuItem(
+                    link='plugins:netbox_vdi_billing:plugin_settings',
+                    link_text='Plugin-Einstellungen',
+                    permissions=['netbox_vdi_billing.view_pluginsettings'],
+                ),
             ),
         ),
     ),
