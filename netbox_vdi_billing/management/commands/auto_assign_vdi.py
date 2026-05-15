@@ -167,7 +167,7 @@ class Command(BaseCommand):
         created = updated = skipped = errors = 0
 
         try:
-            f = open(options['csv'], newline='', encoding='utf-8-sig')
+            f = open(options['csv'], newline='', encoding='utf-8-sig')  # BOM-aware, Excel-kompatibel
         except FileNotFoundError:
             raise CommandError(f"CSV-Datei nicht gefunden: {options['csv']}")
 

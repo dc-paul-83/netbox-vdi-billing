@@ -42,6 +42,14 @@ class CostCenter(NetBoxModel):
     def get_absolute_url(self):
         return reverse('plugins:netbox_vdi_billing:costcenter', args=[self.pk])
 
+    def to_csv(self):
+        return (
+            self.number,
+            self.name,
+            self.department,
+            self.description,
+        )
+
     @property
     def vm_count(self):
         return self.assignments.count()
@@ -91,6 +99,16 @@ class VDIBillingProfile(NetBoxModel):
 
     def get_absolute_url(self):
         return reverse('plugins:netbox_vdi_billing:vdibillingprofile', args=[self.pk])
+
+    def to_csv(self):
+        return (
+            self.name,
+            self.base_price,
+            self.vcpu_price,
+            self.ram_price_per_gb,
+            self.gpu_surcharge,
+            self.description,
+        )
 
     def calculate_cost(self, vm: VirtualMachine) -> float:
         """Berechnet den Monatspreis für eine konkrete VM."""
@@ -163,6 +181,19 @@ class VDIAssignment(NetBoxModel):
         if self.pk:
             return reverse('plugins:netbox_vdi_billing:vdiassignment', args=[self.pk])
         return reverse('plugins:netbox_vdi_billing:vdiassignment_list')
+
+    def to_csv(self):
+        return (
+            self.virtual_machine.name,
+            self.cost_center.number if self.cost_center else '',
+            self.cost_center.department if self.cost_center else '',
+            self.profile.name if self.profile else '',
+            self.assigned_to,
+            self.email,
+            self.cost_override if self.cost_override is not None else '',
+            self.cost_monthly,
+            self.notes,
+        )
 
     @property
     def cost_monthly(self) -> float:

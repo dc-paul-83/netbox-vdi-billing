@@ -1,3 +1,5 @@
+import csv
+import io
 from collections import defaultdict
 from netbox.views import generic as nb_generic
 from django.contrib import messages
@@ -325,6 +327,10 @@ class ChargebackOverviewView(LoginRequiredMixin, View):
         total_yearly  = round(total_monthly * 12, 2)
         total_vms     = sum(g['vm_count'] for g in groups)
 
+        fmt = request.GET.get('format', 'html')
+        if fmt == 'csv':
+            return self._csv_response(assignments)
+
         return render(request, self.template_name, {
             'groups': groups,
             'total_monthly': round(total_monthly, 2),
@@ -335,6 +341,41 @@ class ChargebackOverviewView(LoginRequiredMixin, View):
             'unassigned_count': models.VDIAssignment.objects.filter(
                 cost_center__isnull=True).count(),
         })
+
+    def _csv_response(self, assignments):
+        """CSV-Export der Chargeback-Daten (UTF-8 mit BOM für Excel)."""
+        buf = io.StringIO()
+        writer = csv.writer(buf, delimiter=';', quoting=csv.QUOTE_ALL)
+        writer.writerow([
+            'Kostenstelle', 'Abteilung', 'VM-Name', 'vCPU', 'RAM (GB)',
+            'Zugewiesen an', 'E-Mail', 'Preisprofil', 'Preisquelle',
+            'Festpreis', 'Kosten/Monat (€)', 'Kosten/Jahr (€)',
+        ])
+        for a in assignments:
+            writer.writerow([
+                a.cost_center.number if a.cost_center else '',
+                a.cost_center.department if a.cost_center else '',
+                a.virtual_machine.name,
+                a.virtual_machine.vcpus or '',
+                round(float(a.virtual_machine.memory or 0) / 1024, 1),
+                a.assigned_to,
+                a.email,
+                a.profile.name if a.profile else '',
+                a.pricing_source,
+                float(a.cost_override) if a.cost_override is not None else '',
+                a.cost_monthly,
+                a.cost_yearly,
+            ])
+
+        from datetime import date
+        filename = f'chargeback_{date.today().strftime("%Y-%m")}.csv'
+        # utf-8-sig = UTF-8 mit BOM → Excel erkennt Umlaute korrekt
+        response = HttpResponse(
+            '﻿' + buf.getvalue(),
+            content_type='text/csv; charset=utf-8',
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
 
 
 # ─── PDF / Druckansicht pro Kostenstelle ─────────────────────────────────────
