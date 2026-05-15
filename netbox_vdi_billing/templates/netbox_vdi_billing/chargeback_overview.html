@@ -78,8 +78,12 @@
       <span class="text-muted small">≈ {{ group.total_yearly|floatformat:2 }} €/Jahr</span>
       {% if group.cost_center_pk %}
       <a href="{% url 'plugins:netbox_vdi_billing:chargeback_print' group.cost_center_pk %}"
-         target="_blank" class="btn btn-sm btn-outline-secondary" title="Druckansicht / PDF">
+         target="_blank" class="btn btn-sm btn-outline-secondary" title="Interne Ansicht mit Einzelpreisen">
         <i class="mdi mdi-printer"></i> PDF
+      </a>
+      <a href="{% url 'plugins:netbox_vdi_billing:chargeback_print' group.cost_center_pk %}?hide_prices=1"
+         target="_blank" class="btn btn-sm btn-outline-warning" title="Kundenansicht – Einzelpreise ausgeblendet">
+        <i class="mdi mdi-eye-off-outline"></i> Kunden-PDF
       </a>
       {% endif %}
     </div>

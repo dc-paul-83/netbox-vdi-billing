@@ -405,9 +405,11 @@ class ChargebackPrintView(LoginRequiredMixin, View):
                 'cost_monthly':  cost,
             })
 
-        fmt = request.GET.get('format', 'html')
+        fmt         = request.GET.get('format', 'html')
+        hide_prices = request.GET.get('hide_prices', '0') == '1'
+
         if fmt == 'pdf':
-            return self._pdf_response(cost_center, vms, total)
+            return self._pdf_response(cost_center, vms, total, hide_prices)
 
         from datetime import date
         return render(request, 'netbox_vdi_billing/chargeback_print.html', {
@@ -417,9 +419,10 @@ class ChargebackPrintView(LoginRequiredMixin, View):
             'total_monthly': round(total, 2),
             'total_yearly':  round(total * 12, 2),
             'month':         date.today().strftime('%B %Y'),
+            'hide_prices':   hide_prices,
         })
 
-    def _pdf_response(self, cost_center, vms, total):
+    def _pdf_response(self, cost_center, vms, total, hide_prices=False):
         try:
             from reportlab.lib import colors
             from reportlab.lib.pagesizes import A4
@@ -437,27 +440,46 @@ class ChargebackPrintView(LoginRequiredMixin, View):
             story  = []
 
             month = date.today().strftime('%B %Y')
-            story.append(Paragraph(f'Chargeback – Kostenstelle {cost_center.number}', styles['h1']))
+            title = f'Kostenstellen-Abrechnung – {cost_center.number}'
+            if hide_prices:
+                title += ' (Kundenansicht)'
+            story.append(Paragraph(title, styles['h1']))
             if cost_center.department:
                 story.append(Paragraph(f'Abteilung: {cost_center.department}', styles['Normal']))
             story.append(Paragraph(f'Abrechnungsmonat: {month}', styles['Normal']))
             story.append(Spacer(1, 0.5*cm))
 
-            header = ['VM-Name', 'vCPU', 'RAM (GB)', 'Zugewiesen an', 'Preisquelle', '€/Monat']
-            data   = [header]
-            for vm in vms:
-                data.append([
-                    vm['name'],
-                    str(vm['vcpus'] or '—'),
-                    str(vm['memory_gb']),
-                    vm['assigned_to'] or '—',
-                    vm['pricing_source'],
-                    f"{vm['cost_monthly']:,.2f} €",
-                ])
-            data.append(['', '', '', '', 'Gesamt/Monat', f"{total:,.2f} €"])
-            data.append(['', '', '', '', 'Gesamt/Jahr',  f"{total*12:,.2f} €"])
+            if hide_prices:
+                # Kundenansicht: keine Einzelpreise, nur Endbeträge
+                header = ['VM-Name', 'vCPU', 'RAM (GB)', 'Zugewiesen an']
+                data   = [header]
+                for vm in vms:
+                    data.append([
+                        vm['name'],
+                        str(vm['vcpus'] or '—'),
+                        str(vm['memory_gb']),
+                        vm['assigned_to'] or '—',
+                    ])
+                data.append(['', '', 'Gesamt/Monat', f"{total:,.2f} €"])
+                data.append(['', '', 'Gesamt/Jahr',  f"{total*12:,.2f} €"])
+                col_widths = [6.5*cm, 1.5*cm, 3*cm, 7.5*cm]
+            else:
+                header = ['VM-Name', 'vCPU', 'RAM (GB)', 'Zugewiesen an', 'Preisquelle', '€/Monat']
+                data   = [header]
+                for vm in vms:
+                    data.append([
+                        vm['name'],
+                        str(vm['vcpus'] or '—'),
+                        str(vm['memory_gb']),
+                        vm['assigned_to'] or '—',
+                        vm['pricing_source'],
+                        f"{vm['cost_monthly']:,.2f} €",
+                    ])
+                data.append(['', '', '', '', 'Gesamt/Monat', f"{total:,.2f} €"])
+                data.append(['', '', '', '', 'Gesamt/Jahr',  f"{total*12:,.2f} €"])
+                col_widths = [5*cm, 1.5*cm, 2*cm, 4*cm, 3.5*cm, 2.5*cm]
 
-            t = Table(data, colWidths=[5*cm, 1.5*cm, 2*cm, 4*cm, 3.5*cm, 2.5*cm])
+            t = Table(data, colWidths=col_widths)
             t.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1d4ed8')),
                 ('TEXTCOLOR',  (0, 0), (-1, 0), colors.white),
