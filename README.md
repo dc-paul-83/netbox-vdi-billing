@@ -11,8 +11,9 @@ A [NetBox](https://github.com/netbox-community/netbox) plugin for VDI chargeback
 
 - **Cost Centers** — Manage cost centers and assign multiple VMs at once via bulk assignment UI
 - **Price Profiles** — Define monthly costs per vCPU, RAM (GB) and GPU surcharge
-- **VDI Assignments** — Link VMs to cost centers and profiles; supports fixed-price override
-- **Chargeback Overview** — Monthly/yearly cost summary grouped by cost center, exportable as PDF
+- **VDI Assignments** — Link VMs to cost centers and profiles; supports fixed-price override; GPU badge visible in list view
+- **Chargeback Overview** — Monthly/yearly cost summary grouped by cost center, exportable as PDF or CSV
+- **Customer PDF** — Second PDF export per cost center with individual prices hidden, only totals visible
 - **Horizon Sync** — Automatically tag persistent (`VDI-Persistent`) and GPU (`VDI-GPU`) VMs via Omnissa Horizon REST API
 - **AD E-Mail Sync** — Read assigned users from Horizon and look up their e-mail in Active Directory (LDAP)
 - **VM Panel** — Billing info panel on every Virtual Machine detail page
@@ -213,9 +214,11 @@ python manage.py sync_vdi_emails --dry-run --debug-horizon
 ```
 
 **LDAP auto-detection order:**
-1. `AUTH_LDAP_SERVER_URI` etc. already in Django settings
-2. `ldap_server` / `ldap_bind_dn` etc. in `PLUGINS_CONFIG` (see Configuration above)
+1. `AUTH_LDAP_SERVER_URI` etc. already in Django settings (e.g. from `ldap_config.py`)
+2. `ldap_server` / `ldap_bind_dn` / `ldap_bind_password` / `ldap_search_base` in `PLUGINS_CONFIG` (see [Configuration](#configuration))
 3. `/opt/netbox/netbox/netbox/ldap_config.py` read directly as fallback
+
+> You do **not** need a separate `ldap_config.py` — just add the four `ldap_*` keys to your `PLUGINS_CONFIG` block and the plugin will use them automatically.
 
 ---
 
@@ -237,13 +240,24 @@ sudo mkdir -p /var/log/netbox
 
 ## UI Overview
 
-| View | URL |
+| View | URL | Notes |
+|---|---|---|
+| Chargeback Overview | `/plugins/vdi-billing/` | KPI cards + cost center breakdown; **CSV export** button |
+| Cost Centers | `/plugins/vdi-billing/cost-centers/` | List, create, bulk edit/delete |
+| Bulk Assignment | `/plugins/vdi-billing/bulk-assign/` | Assign multiple VMs at once |
+| Price Profiles | `/plugins/vdi-billing/profiles/` | List, create, edit |
+| All Assignments | `/plugins/vdi-billing/assignments/` | GPU badge column; bulk edit/delete |
+
+### PDF Export
+
+Each cost center row in the Chargeback Overview offers two PDF buttons:
+
+| Button | Description |
 |---|---|
-| Chargeback Overview | `/plugins/vdi-billing/` |
-| Cost Centers | `/plugins/vdi-billing/cost-centers/` |
-| Bulk Assignment | `/plugins/vdi-billing/bulk-assign/` |
-| Price Profiles | `/plugins/vdi-billing/profiles/` |
-| All Assignments | `/plugins/vdi-billing/assignments/` |
+| 🖨 **PDF** | Full internal view — all per-VM prices visible |
+| 👁 **Kunden-PDF** | Customer view — per-VM prices hidden, only monthly/yearly totals shown |
+
+Both PDFs can also be downloaded directly via `?format=pdf` and `?format=pdf&hide_prices=1`.
 
 The plugin also adds a **VDI Billing** panel to every Virtual Machine detail page showing cost center, assigned user, e-mail, price profile and monthly/yearly costs.
 
@@ -258,8 +272,10 @@ Define pricing rules per VDI class:
 | **Name** | Profile name | `Standard VDI` |
 | **Base price** | Fixed amount per VM/month | `10.00 €` |
 | **Price per vCPU** | Multiplied by VM's vCPU count | `2.00 €` |
-| **Price per GB RAM** | Multiplied by VM's RAM in GB | `0.50 €` |
+| **Price per GB RAM** | Multiplied by VM's RAM in GB (rounded **up** to whole GB) | `0.50 €` |
 | **GPU surcharge** | Added when VM has `VDI-GPU` tag or `gpu` custom field | `80.00 €` |
+
+> RAM is always rounded **up** to the next whole GB (`math.ceil`) — a VM with 6.5 GB RAM counts as 7 GB.
 
 **Example calculation** — 4 vCPU, 16 GB RAM, no GPU:
 ```
