@@ -115,12 +115,60 @@ class HorizonClient:
             return None
 
 
-# ── LDAP-Abfrage via NetBox-Config ───────────────────────────────────────────
+# ── LDAP-Config laden ────────────────────────────────────────────────────────
+
+def _load_ldap_config():
+    """
+    Liest LDAP-Einstellungen aus Django-Settings ODER direkt aus
+    /opt/netbox/netbox/netbox/ldap_config.py (NetBox-Standard-Pfad).
+    Gibt dict mit server_uri, bind_dn, bind_password, search_base zurück.
+    """
+    server_uri    = getattr(settings, 'AUTH_LDAP_SERVER_URI', '')
+    bind_dn       = getattr(settings, 'AUTH_LDAP_BIND_DN', '')
+    bind_password = getattr(settings, 'AUTH_LDAP_BIND_PASSWORD', '')
+    search_base   = ''
+
+    user_search = getattr(settings, 'AUTH_LDAP_USER_SEARCH', None)
+    if user_search and hasattr(user_search, 'base_dn'):
+        search_base = user_search.base_dn
+
+    # Fallback: ldap_config.py direkt als Modul laden
+    if not server_uri:
+        import importlib.util, os
+        candidates = [
+            '/opt/netbox/netbox/netbox/ldap_config.py',
+            os.path.join(getattr(settings, 'BASE_DIR', ''), 'netbox', 'ldap_config.py'),
+        ]
+        for path in candidates:
+            if os.path.exists(path):
+                spec   = importlib.util.spec_from_file_location('ldap_config', path)
+                module = importlib.util.module_from_spec(spec)
+                try:
+                    spec.loader.exec_module(module)
+                    server_uri    = getattr(module, 'AUTH_LDAP_SERVER_URI', server_uri)
+                    bind_dn       = getattr(module, 'AUTH_LDAP_BIND_DN', bind_dn)
+                    bind_password = getattr(module, 'AUTH_LDAP_BIND_PASSWORD', bind_password)
+                    us = getattr(module, 'AUTH_LDAP_USER_SEARCH', None)
+                    if us and hasattr(us, 'base_dn'):
+                        search_base = us.base_dn
+                except Exception:
+                    pass
+                break
+
+    return {
+        'server_uri':    server_uri,
+        'bind_dn':       bind_dn,
+        'bind_password': bind_password,
+        'search_base':   search_base,
+    }
+
+
+# ── LDAP-Abfrage ─────────────────────────────────────────────────────────────
 
 def _ldap_lookup(usernames: list[str]) -> dict[str, dict]:
     """
     Gibt {username_lower: {'email': '...', 'display_name': '...'}} zurück.
-    Nutzt AUTH_LDAP_* aus den Django-Settings.
+    Nutzt AUTH_LDAP_* aus Django-Settings oder ldap_config.py direkt.
     """
     try:
         import ldap as _ldap
@@ -130,25 +178,20 @@ def _ldap_lookup(usernames: list[str]) -> dict[str, dict]:
             'Bitte "pip install python-ldap" ausführen.'
         )
 
-    server_uri    = getattr(settings, 'AUTH_LDAP_SERVER_URI', '')
-    bind_dn       = getattr(settings, 'AUTH_LDAP_BIND_DN', '')
-    bind_password = getattr(settings, 'AUTH_LDAP_BIND_PASSWORD', '')
+    cfg = _load_ldap_config()
+    server_uri  = cfg['server_uri']
+    bind_dn     = cfg['bind_dn']
+    bind_password = cfg['bind_password']
+    search_base = cfg['search_base']
 
     if not server_uri:
         raise CommandError(
-            'AUTH_LDAP_SERVER_URI ist nicht konfiguriert. '
-            'NetBox muss mit LDAP-Auth eingerichtet sein.'
+            'AUTH_LDAP_SERVER_URI nicht gefunden – weder in Django-Settings '
+            'noch in /opt/netbox/netbox/netbox/ldap_config.py.'
         )
-
-    # Search-Base aus AUTH_LDAP_USER_SEARCH ermitteln
-    user_search = getattr(settings, 'AUTH_LDAP_USER_SEARCH', None)
-    if user_search and hasattr(user_search, 'base_dn'):
-        search_base = user_search.base_dn
-    else:
-        # Fallback: aus Server-URI ableiten nicht möglich → Fehler
+    if not search_base:
         raise CommandError(
-            'AUTH_LDAP_USER_SEARCH ist nicht konfiguriert oder hat kein base_dn. '
-            'Bitte in configuration.py prüfen.'
+            'AUTH_LDAP_USER_SEARCH / search_base nicht gefunden.'
         )
 
     conn = _ldap.initialize(server_uri)
