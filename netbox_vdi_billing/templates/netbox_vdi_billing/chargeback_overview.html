@@ -1,13 +1,13 @@
 {% extends 'base/layout.html' %}
 {% load helpers %}
 
-{% block title %}VDI Kostenstellen-Übersicht{% endblock %}
+{% block title %}VDI Chargeback Overview{% endblock %}
 
 {% block content %}
 <div class="row mb-3">
   <div class="col">
     <h1 class="page-header d-flex justify-content-between align-items-center">
-      <span><i class="mdi mdi-currency-eur"></i> VDI Kostenstellen-Übersicht</span>
+      <span><i class="mdi mdi-currency-eur"></i> Chargeback Overview</span>
       {% if plugin_settings.billing_enabled %}
       <a href="?format=csv" class="btn btn-sm btn-outline-success">
         <i class="mdi mdi-file-delimited-outline"></i> CSV Export
@@ -17,12 +17,12 @@
   </div>
 </div>
 
-{# ── KPI-Karten ── #}
+{# KPI Cards #}
 <div class="row mb-4">
   <div class="col-md-3">
     <div class="card">
       <div class="card-body text-center">
-        <div class="text-muted small text-uppercase fw-bold mb-1">Kostenstellen</div>
+        <div class="text-muted small text-uppercase fw-bold mb-1">Cost Centers</div>
         <div class="fs-3 fw-bold">{{ groups|length }}</div>
       </div>
     </div>
@@ -30,11 +30,11 @@
   <div class="col-md-3">
     <div class="card">
       <div class="card-body text-center">
-        <div class="text-muted small text-uppercase fw-bold mb-1">VMs gesamt</div>
+        <div class="text-muted small text-uppercase fw-bold mb-1">Total VMs</div>
         <div class="fs-3 fw-bold">{{ total_vms }}</div>
         {% if unassigned_count %}
         <div class="text-warning small mt-1">
-          <i class="mdi mdi-alert"></i> {{ unassigned_count }} ohne Kostenstelle
+          <i class="mdi mdi-alert"></i> {{ unassigned_count }} unassigned
         </div>
         {% endif %}
       </div>
@@ -44,7 +44,7 @@
   <div class="col-md-3">
     <div class="card border-primary">
       <div class="card-body text-center">
-        <div class="text-primary small text-uppercase fw-bold mb-1">Kosten / Monat</div>
+        <div class="text-primary small text-uppercase fw-bold mb-1">Cost / Month</div>
         <div class="fs-3 fw-bold text-primary">{{ total_monthly|floatformat:2 }} €</div>
       </div>
     </div>
@@ -52,7 +52,7 @@
   <div class="col-md-3">
     <div class="card">
       <div class="card-body text-center">
-        <div class="text-muted small text-uppercase fw-bold mb-1">Kosten / Jahr</div>
+        <div class="text-muted small text-uppercase fw-bold mb-1">Cost / Year</div>
         <div class="fs-3 fw-bold">{{ total_yearly|floatformat:2 }} €</div>
       </div>
     </div>
@@ -60,7 +60,7 @@
   {% endif %}
 </div>
 
-{# ── Kostenstellen-Tabelle ── #}
+{# Cost Center Cards #}
 {% for group in groups %}
 <div class="card mb-3">
   <div class="card-header d-flex justify-content-between align-items-center">
@@ -79,17 +79,17 @@
     </div>
     <div class="d-flex align-items-center gap-3">
       {% if plugin_settings.billing_enabled %}
-      <span class="fw-bold text-primary">{{ group.total_monthly|floatformat:2 }} €/Monat</span>
-      <span class="text-muted small">≈ {{ group.total_yearly|floatformat:2 }} €/Jahr</span>
+      <span class="fw-bold text-primary">{{ group.total_monthly|floatformat:2 }} €/month</span>
+      <span class="text-muted small">≈ {{ group.total_yearly|floatformat:2 }} €/year</span>
       {% endif %}
       {% if group.cost_center_pk and plugin_settings.billing_enabled %}
       <a href="{% url 'plugins:netbox_vdi_billing:chargeback_print' group.cost_center_pk %}"
-         target="_blank" class="btn btn-sm btn-outline-secondary" title="Interne Ansicht mit Einzelpreisen">
+         target="_blank" class="btn btn-sm btn-outline-secondary" title="Internal view with detailed prices">
         <i class="mdi mdi-printer"></i> PDF
       </a>
       <a href="{% url 'plugins:netbox_vdi_billing:chargeback_print' group.cost_center_pk %}?hide_prices=1"
-         target="_blank" class="btn btn-sm btn-outline-warning" title="Kundenansicht – Einzelpreise ausgeblendet">
-        <i class="mdi mdi-eye-off-outline"></i> Kunden-PDF
+         target="_blank" class="btn btn-sm btn-outline-warning" title="Customer view with hidden prices">
+        <i class="mdi mdi-eye-off-outline"></i> Customer PDF
       </a>
       {% endif %}
     </div>
@@ -98,14 +98,14 @@
     <table class="table table-hover table-sm mb-0">
       <thead class="table-light">
         <tr>
-          <th>VM-Name</th>
+          <th>VM Name</th>
           <th>vCPU</th>
           <th>RAM</th>
-          <th>Zugewiesen an</th>
+          <th>Assigned To</th>
           {% if plugin_settings.billing_enabled %}
-          <th>Preisquelle</th>
-          <th class="text-end">€/Monat</th>
-          <th class="text-end">€/Jahr</th>
+          <th>Pricing Source</th>
+          <th class="text-end">€/Month</th>
+          <th class="text-end">€/Year</th>
           {% endif %}
           <th></th>
         </tr>
@@ -141,11 +141,11 @@
       <tfoot class="table-light fw-bold">
         <tr>
           {% if plugin_settings.billing_enabled %}
-          <td colspan="5" class="text-end">Summe</td>
+          <td colspan="5" class="text-end">Total</td>
           <td class="text-end text-primary">{{ group.total_monthly|floatformat:2 }} €</td>
           <td class="text-end text-muted">{{ group.total_yearly|floatformat:2 }} €</td>
           {% else %}
-          <td colspan="4" class="text-end">Summe</td>
+          <td colspan="4" class="text-end">Total</td>
           {% endif %}
           <td></td>
         </tr>
@@ -156,8 +156,8 @@
 {% empty %}
 <div class="alert alert-info">
   <i class="mdi mdi-information"></i>
-  Noch keine VDI-Abrechnungszuordnungen vorhanden.
-  <a href="{% url 'plugins:netbox_vdi_billing:bulk_assign' %}" class="alert-link">Kostenstellen und VMs jetzt zuordnen →</a>
+  No VDI assignments configured yet.
+  <a href="{% url 'plugins:netbox_vdi_billing:bulk_assign' %}" class="alert-link">Create cost centers and assign VMs now →</a>
 </div>
 {% endfor %}
 

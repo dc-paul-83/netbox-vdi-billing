@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<title>Kostenstellen-Abrechnung – {{ cost_center }} – {{ month }}{% if hide_prices %} (Kundenansicht){% endif %}</title>
+<title>Cost Center Chargeback – {{ cost_center }} – {{ month }}{% if hide_prices %} (Customer View){% endif %}</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; color: #1e293b; padding: 2cm; }
@@ -11,6 +11,7 @@
   .meta span { margin-right: 24px; }
   .badge-customer { display:inline-block; background:#f59e0b; color:#fff; font-size:9pt;
                     padding:2px 10px; border-radius:12px; font-weight:600; margin-left:10px; vertical-align:middle; }
+  .hidden { display: none !important; }
 
   .kpis { display: flex; gap: 20px; margin-bottom: 28px; }
   .kpi { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 20px; flex: 1; }
@@ -49,28 +50,28 @@
 
 <div class="no-print">
   {% if plugin_settings.billing_enabled %}
-  <button onclick="window.print()" class="btn btn-blue">🖨 Als PDF drucken</button>
-  <a href="?format=pdf{% if hide_prices %}&hide_prices=1{% endif %}" class="btn btn-green">⬇ PDF herunterladen</a>
+  <button onclick="window.print()" class="btn btn-blue">🖨 Print to PDF</button>
+  <a href="?format=pdf{% if hide_prices %}&hide_prices=1{% endif %}" class="btn btn-green">⬇ Download PDF</a>
   {% if hide_prices %}
-    <a href="?" class="btn btn-gray">🔓 Interne Ansicht (mit Preisen)</a>
+    <a href="?" class="btn btn-gray">🔓 Internal View (with prices)</a>
   {% else %}
-    <a href="?hide_prices=1" class="btn btn-orange">👁 Kundenansicht (Preise ausblenden)</a>
-    <a href="?format=pdf&hide_prices=1" class="btn btn-orange">⬇ Kunden-PDF</a>
+    <a href="?hide_prices=1" class="btn btn-orange">👁 Customer View (hide prices)</a>
+    <a href="?format=pdf&hide_prices=1" class="btn btn-orange">⬇ Download Customer PDF</a>
   {% endif %}
   {% else %}
-  <button onclick="window.print()" class="btn btn-blue">🖨 Als PDF drucken</button>
-  <a href="?format=pdf" class="btn btn-green">⬇ PDF herunterladen</a>
+  <button onclick="window.print()" class="btn btn-blue">🖨 Print to PDF</button>
+  <a href="?format=pdf" class="btn btn-green">⬇ Download PDF</a>
   {% endif %}
-  <button onclick="window.close()" class="btn btn-gray">✕ Schließen</button>
+  <button onclick="window.close()" class="btn btn-gray">✕ Close</button>
 </div>
 
 <h1>
-  Kostenstellen-Abrechnung: {{ cost_center }}
-  {% if hide_prices %}<span class="badge-customer">Kundenansicht</span>{% endif %}
+  Cost Center Chargeback: {{ cost_center }}
+  {% if hide_prices %}<span class="badge-customer">Customer View</span>{% endif %}
 </h1>
 <div class="meta">
-  {% if department %}<span><strong>Abteilung:</strong> {{ department }}</span>{% endif %}
-  <span><strong>Zeitraum:</strong> {{ month }}</span>
+  {% if department %}<span><strong>Department:</strong> {{ department }}</span>{% endif %}
+  <span><strong>Period:</strong> {{ month }}</span>
   <span><strong>VMs:</strong> {{ vms|length }}</span>
 </div>
 
@@ -81,11 +82,11 @@
   </div>
   {% if plugin_settings.billing_enabled %}
   <div class="kpi">
-    <div class="kpi-label">Monatliche Kosten</div>
+    <div class="kpi-label">Monthly Cost</div>
     <div class="kpi-value blue">{{ total_monthly|floatformat:2 }} €</div>
   </div>
   <div class="kpi">
-    <div class="kpi-label">Jährliche Kosten</div>
+    <div class="kpi-label">Yearly Cost</div>
     <div class="kpi-value">{{ total_yearly|floatformat:2 }} €</div>
   </div>
   {% endif %}
@@ -94,14 +95,14 @@
 <table>
   <thead>
     <tr>
-      <th>VM-Name</th>
+      <th>VM Name</th>
       <th>vCPU</th>
       <th>RAM (GB)</th>
-      <th>Zugewiesen an</th>
+      <th>Assigned To</th>
       {% if plugin_settings.billing_enabled and not hide_prices %}
-      <th>Preisquelle</th>
-      <th class="text-right">€/Monat</th>
-      <th class="text-right">€/Jahr</th>
+      <th>Pricing Source</th>
+      <th class="text-right">€/Month</th>
+      <th class="text-right">€/Year</th>
       {% endif %}
     </tr>
   </thead>
@@ -124,10 +125,10 @@
     {% if plugin_settings.billing_enabled %}
     <tr>
       {% if hide_prices %}
-      <td colspan="3">Gesamt/Monat</td>
+      <td colspan="3">Total / Month</td>
       <td class="total-val">{{ total_monthly|floatformat:2 }} €</td>
       {% else %}
-      <td colspan="4">Gesamt/Monat</td>
+      <td colspan="4">Total / Month</td>
       <td></td>
       <td class="total-val">{{ total_monthly|floatformat:2 }} €</td>
       <td class="total-val">{{ total_yearly|floatformat:2 }} €</td>
@@ -135,7 +136,7 @@
     </tr>
     {% if hide_prices %}
     <tr>
-      <td colspan="3">Gesamt/Jahr</td>
+      <td colspan="3">Total / Year</td>
       <td class="total-val">{{ total_yearly|floatformat:2 }} €</td>
     </tr>
     {% endif %}
@@ -144,8 +145,8 @@
 </table>
 
 <div class="footer">
-  <span>Kostenstelle {{ cost_center }}{% if department %} · {{ department }}{% endif %}</span>
-  <span>{{ month }}{% if hide_prices %} · Kundenansicht{% endif %}</span>
+  <span>Cost Center {{ cost_center }}{% if department %} · {{ department }}{% endif %}</span>
+  <span>{{ month }}{% if hide_prices %} · Customer View{% endif %}</span>
 </div>
 </body>
 </html>
