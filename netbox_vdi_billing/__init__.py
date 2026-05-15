@@ -26,6 +26,11 @@ class VDIBillingConfig(PluginConfig):
         'persistent_tag': 'VDI-Persistent',
         'gpu_tag': 'VDI-GPU',
         'gpu_pool_pattern': r'nvidia|vgpu|gpu|grid',
+        # LDAP für E-Mail-Sync (optional, nur nötig wenn kein AUTH_LDAP_* in NetBox)
+        # 'ldap_server':      'ldap://dc.example.com',
+        # 'ldap_bind_dn':     'CN=svc-netbox,OU=...,DC=example,DC=com',
+        # 'ldap_bind_password': 'geheim',
+        # 'ldap_search_base': 'DC=example,DC=com',
     }
 
     def ready(self):

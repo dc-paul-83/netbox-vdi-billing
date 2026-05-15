@@ -132,7 +132,15 @@ def _load_ldap_config():
     if user_search and hasattr(user_search, 'base_dn'):
         search_base = user_search.base_dn
 
-    # Fallback: ldap_config.py direkt als Modul laden
+    # Fallback 1: Plugin-Config (PLUGINS_CONFIG['netbox_vdi_billing'])
+    if not server_uri:
+        plugin_cfg    = settings.PLUGINS_CONFIG.get('netbox_vdi_billing', {})
+        server_uri    = plugin_cfg.get('ldap_server', server_uri)
+        bind_dn       = plugin_cfg.get('ldap_bind_dn', bind_dn)
+        bind_password = plugin_cfg.get('ldap_bind_password', bind_password)
+        search_base   = plugin_cfg.get('ldap_search_base', search_base)
+
+    # Fallback 2: ldap_config.py direkt als Modul laden
     if not server_uri:
         import importlib.util, os
         candidates = [
