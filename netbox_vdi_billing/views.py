@@ -1,5 +1,6 @@
 import csv
 import io
+import math
 from collections import defaultdict
 from netbox.views import generic as nb_generic
 from django.contrib import messages
@@ -291,7 +292,7 @@ def _build_chargeback_groups(assignments):
         grp['vms'].append({
             'name':                a.virtual_machine.name,
             'vcpus':               a.virtual_machine.vcpus,
-            'memory_gb':           round(float(a.virtual_machine.memory or 0) / 1024, 1),
+            'memory_gb':           math.ceil(float(a.virtual_machine.memory or 0) / 1024),
             'assigned_to':         a.assigned_to,
             'profile':             str(a.profile) if a.profile else None,
             'cost_override':       float(a.cost_override) if a.cost_override is not None else None,
@@ -357,7 +358,7 @@ class ChargebackOverviewView(LoginRequiredMixin, View):
                 a.cost_center.department if a.cost_center else '',
                 a.virtual_machine.name,
                 a.virtual_machine.vcpus or '',
-                round(float(a.virtual_machine.memory or 0) / 1024, 1),
+                math.ceil(float(a.virtual_machine.memory or 0) / 1024),
                 a.assigned_to,
                 a.email,
                 a.profile.name if a.profile else '',
@@ -399,7 +400,7 @@ class ChargebackPrintView(LoginRequiredMixin, View):
             vms.append({
                 'name':          a.virtual_machine.name,
                 'vcpus':         a.virtual_machine.vcpus,
-                'memory_gb':     round(float(a.virtual_machine.memory or 0) / 1024, 1),
+                'memory_gb':     math.ceil(float(a.virtual_machine.memory or 0) / 1024),
                 'assigned_to':   a.assigned_to,
                 'pricing_source': a.pricing_source,
                 'cost_monthly':  cost,
