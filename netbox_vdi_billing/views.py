@@ -235,14 +235,11 @@ class BulkAssignCostCenterView(LoginRequiredMixin, View):
 
 def _group_vms_by_prefix(vm_qs, assigned_ids, vm_cost_centers):
     """Gruppiert VMs nach Standort-Präfix für die Bulk-Assign-Ansicht."""
+    # Customize these prefixes to match your site naming convention
     PREFIX_LABELS = {
-        'atwie':    'AT Wien',
-        'chber':    'CH Bern',
-        'deber':    'DE Berlin',
-        'dehol':    'DE Holzminden',
-        'deopp':    'DE Oppau',
-        'desto':    'DE Stuttgart',
-        'sg':       'Singapore',
+        'site1':  'Site 1',
+        'site2':  'Site 2',
+        'site3':  'Site 3',
     }
     groups = defaultdict(lambda: {'label': '', 'vms': []})
 

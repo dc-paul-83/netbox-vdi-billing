@@ -10,8 +10,8 @@ Konfiguration in NetBox configuration.py:
       'netbox_vdi_billing': {
           'horizon_instances': [
               {
-                  'host':     'horizon-opp.murrelektronik.com',
-                  'domain':   'MEGroup',
+                  'host':     'horizon.example.com',
+                  'domain':   'EXAMPLE',
                   'username': 'svc-netbox',
                   'password': 'geheim',
               },

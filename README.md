@@ -92,7 +92,7 @@ PLUGINS_CONFIG = {
         # Use internal IPs directly — not the UAG (Unified Access Gateway)!
         'horizon_instances': [
             {
-                'host':     '10.50.165.1',    # internal Connection Server IP
+                'host':     '192.168.1.100',  # internal Connection Server IP
                 'domain':   'YOURDOMAIN',
                 'username': 'svc-netbox',
                 'password': 'secret',

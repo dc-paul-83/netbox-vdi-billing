@@ -88,7 +88,7 @@ class Command(BaseCommand):
             '--filter-name',
             default='',
             metavar='REGEX',
-            help='Nur VMs deren Name diesem Regex entspricht, z.B. "^atwie-vdi-.*"',
+            help='Nur VMs deren Name diesem Regex entspricht, z.B. "^site-vdi-.*"',
         )
         parser.add_argument(
             '--exclude-tag',

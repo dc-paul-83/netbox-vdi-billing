@@ -21,7 +21,7 @@ Ausführung:
   python manage.py sync_vdi_emails
 
   # Nur bestimmte VMs (Regex auf VM-Name)
-  python manage.py sync_vdi_emails --filter-name "^atwie-vdi-.*"
+  python manage.py sync_vdi_emails --filter-name "^site-vdi-.*"
 
 Cron (täglich 02:30 Uhr, nach sync_horizon_tags und auto_assign_vdi):
   30 2 * * * /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py \\
