@@ -94,6 +94,26 @@ class HorizonClient:
     def get_machines(self):
         return self._paginate('/inventory/v8/machines')
 
+    def get_pools(self):
+        return self._request('GET', '/inventory/v2/desktop-pools') or []
+
+    def get_pool_assignments(self, pool_id):
+        """Gibt {machine_id: username} zurück für einen dedicated Pool."""
+        try:
+            result = self._request(
+                'GET', f'/inventory/v1/desktop-pools/{pool_id}/desktop-assignments'
+            )
+            return result or []
+        except CommandError:
+            return []
+
+    def get_user(self, user_id):
+        """Gibt AD-User-Objekt zurück (enthält login_name / sam_account_name)."""
+        try:
+            return self._request('GET', f'/inventory/v1/ad-users-or-groups/{user_id}')
+        except CommandError:
+            return None
+
 
 # ── LDAP-Abfrage via NetBox-Config ───────────────────────────────────────────
 
@@ -219,6 +239,11 @@ class Command(BaseCommand):
                 'Benutzername für AD-Lookup verwenden'
             ),
         )
+        parser.add_argument(
+            '--debug-horizon',
+            action='store_true',
+            help='Gibt die rohen Felder der ersten Maschine und Pool-Assignments aus',
+        )
 
     def handle(self, *args, **options):
         dry_run      = options['dry_run']
@@ -226,6 +251,7 @@ class Command(BaseCommand):
         overwrite    = options['overwrite']
         update_name  = options['update_assigned_to']
         no_horizon   = options['no_horizon']
+        debug        = options['debug_horizon']
 
         if dry_run:
             self.stdout.write(self.style.WARNING('=== DRY RUN – nichts wird gespeichert ===\n'))
@@ -273,26 +299,91 @@ class Command(BaseCommand):
                     machines = client.get_machines()
                     self.stdout.write(f'  {len(machines)} Maschinen erhalten')
 
+                    # Debug: rohe Felder ausgeben
+                    if debug and machines:
+                        m0 = machines[0]
+                        self.stdout.write(f'\n  DEBUG Maschinenfelder: {sorted(m0.keys())}')
+                        self.stdout.write(f'  DEBUG Beispiel: {json.dumps(m0, indent=2)[:800]}\n')
+
+                    # machine_id → name Mapping
+                    id_to_name = {m['id']: m['name'] for m in machines if m.get('id') and m.get('name')}
+
+                    # Methode 1: user_name direkt auf Maschine (aktive Session)
                     for m in machines:
                         name = m.get('name', '')
                         if not name:
                             continue
                         if filter_name and not re.match(filter_name, name, re.IGNORECASE):
                             continue
-                        # Horizon liefert assigned user unter verschiedenen Keys
                         user = (
                             m.get('user_name') or
-                            m.get('assigned_user') or
                             m.get('session', {}).get('user_name') or
                             ''
                         )
                         if user:
-                            # Format kann sein: DOMAIN\username oder username@domain
                             if '\\' in user:
                                 user = user.split('\\')[-1]
                             elif '@' in user:
                                 user = user.split('@')[0]
                             vm_to_user[name.lower()] = user.lower()
+
+                    # Methode 2: Pool-Assignments für DEDICATED Pools abfragen
+                    pools = client.get_pools()
+                    dedicated_pools = [
+                        p for p in pools
+                        if (
+                            p.get('automated_desktop_data', {}).get('user_assignment')
+                            or p.get('user_assignment', '')
+                        ) == 'DEDICATED'
+                    ]
+                    self.stdout.write(f'  {len(dedicated_pools)} DEDICATED Pools → hole Zuordnungen ...')
+
+                    user_id_cache = {}  # user_id → username
+
+                    for pool in dedicated_pools:
+                        pool_id = pool.get('id', '')
+                        assignments = client.get_pool_assignments(pool_id)
+
+                        if debug and assignments:
+                            self.stdout.write(f'\n  DEBUG Assignment-Felder: {sorted(assignments[0].keys())}')
+                            self.stdout.write(f'  DEBUG Beispiel: {json.dumps(assignments[0], indent=2)[:400]}\n')
+
+                        for asgn in assignments:
+                            machine_id = asgn.get('machine_id') or asgn.get('id', '')
+                            machine_name = id_to_name.get(machine_id, '')
+                            if not machine_name:
+                                continue
+                            if filter_name and not re.match(filter_name, machine_name, re.IGNORECASE):
+                                continue
+
+                            # user_ids kann eine Liste sein
+                            user_ids = asgn.get('user_ids') or asgn.get('user_id') or []
+                            if isinstance(user_ids, str):
+                                user_ids = [user_ids]
+
+                            for uid in user_ids:
+                                if not uid:
+                                    continue
+                                if uid not in user_id_cache:
+                                    user_obj = client.get_user(uid)
+                                    if user_obj:
+                                        login = (
+                                            user_obj.get('login_name') or
+                                            user_obj.get('sam_account_name') or
+                                            user_obj.get('name') or
+                                            ''
+                                        )
+                                        if '\\' in login:
+                                            login = login.split('\\')[-1]
+                                        elif '@' in login:
+                                            login = login.split('@')[0]
+                                        user_id_cache[uid] = login.lower()
+                                    else:
+                                        user_id_cache[uid] = ''
+
+                                username = user_id_cache.get(uid, '')
+                                if username and machine_name.lower() not in vm_to_user:
+                                    vm_to_user[machine_name.lower()] = username
 
                 except CommandError as e:
                     self.stderr.write(f'  ✗ {host}: {e}')
