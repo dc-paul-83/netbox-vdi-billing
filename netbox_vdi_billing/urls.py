@@ -37,4 +37,7 @@ urlpatterns = [
     path('assignments/<int:pk>/edit/', views.VDIAssignmentEditView.as_view(), name='vdiassignment_edit'),
     path('assignments/<int:pk>/delete/', views.VDIAssignmentDeleteView.as_view(), name='vdiassignment_delete'),
     path('assignments/<int:pk>/changelog/', views.VDIAssignmentChangeLogView.as_view(), name='vdiassignment_changelog'),
+
+    # ── Plugin-Einstellungen ───────────────────────────────────────────────────
+    path('settings/', views.PluginSettingsView.as_view(), name='plugin_settings'),
 ]

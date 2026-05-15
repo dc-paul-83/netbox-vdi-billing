@@ -48,6 +48,7 @@
 <body>
 
 <div class="no-print">
+  {% if plugin_settings.billing_enabled %}
   <button onclick="window.print()" class="btn btn-blue">🖨 Als PDF drucken</button>
   <a href="?format=pdf{% if hide_prices %}&hide_prices=1{% endif %}" class="btn btn-green">⬇ PDF herunterladen</a>
   {% if hide_prices %}
@@ -55,6 +56,10 @@
   {% else %}
     <a href="?hide_prices=1" class="btn btn-orange">👁 Kundenansicht (Preise ausblenden)</a>
     <a href="?format=pdf&hide_prices=1" class="btn btn-orange">⬇ Kunden-PDF</a>
+  {% endif %}
+  {% else %}
+  <button onclick="window.print()" class="btn btn-blue">🖨 Als PDF drucken</button>
+  <a href="?format=pdf" class="btn btn-green">⬇ PDF herunterladen</a>
   {% endif %}
   <button onclick="window.close()" class="btn btn-gray">✕ Schließen</button>
 </div>
@@ -74,6 +79,7 @@
     <div class="kpi-label">VMs</div>
     <div class="kpi-value">{{ vms|length }}</div>
   </div>
+  {% if plugin_settings.billing_enabled %}
   <div class="kpi">
     <div class="kpi-label">Monatliche Kosten</div>
     <div class="kpi-value blue">{{ total_monthly|floatformat:2 }} €</div>
@@ -82,6 +88,7 @@
     <div class="kpi-label">Jährliche Kosten</div>
     <div class="kpi-value">{{ total_yearly|floatformat:2 }} €</div>
   </div>
+  {% endif %}
 </div>
 
 <table>
@@ -91,7 +98,7 @@
       <th>vCPU</th>
       <th>RAM (GB)</th>
       <th>Zugewiesen an</th>
-      {% if not hide_prices %}
+      {% if plugin_settings.billing_enabled and not hide_prices %}
       <th>Preisquelle</th>
       <th class="text-right">€/Monat</th>
       <th class="text-right">€/Jahr</th>
@@ -105,7 +112,7 @@
       <td>{{ vm.vcpus|default:"—" }}</td>
       <td>{{ vm.memory_gb }}</td>
       <td>{{ vm.assigned_to|default:"—" }}</td>
-      {% if not hide_prices %}
+      {% if plugin_settings.billing_enabled and not hide_prices %}
       <td>{{ vm.pricing_source }}</td>
       <td class="text-right">{% if vm.cost_monthly > 0 %}{{ vm.cost_monthly|floatformat:2 }} €{% else %}—{% endif %}</td>
       <td class="text-right">{% if vm.cost_monthly > 0 %}{{ vm.cost_yearly|floatformat:2 }} €{% else %}—{% endif %}</td>
@@ -114,6 +121,7 @@
     {% endfor %}
   </tbody>
   <tfoot>
+    {% if plugin_settings.billing_enabled %}
     <tr>
       {% if hide_prices %}
       <td colspan="3">Gesamt/Monat</td>
@@ -130,6 +138,7 @@
       <td colspan="3">Gesamt/Jahr</td>
       <td class="total-val">{{ total_yearly|floatformat:2 }} €</td>
     </tr>
+    {% endif %}
     {% endif %}
   </tfoot>
 </table>

@@ -34,6 +34,10 @@ class CostCenterListView(generic.ObjectListView):
     table = tables.CostCenterTable
     filterset = filtersets.CostCenterFilterSet
 
+    def get_extra_context(self, request):
+        settings = models.PluginSettings.get_settings()
+        return {'plugin_settings': settings}
+
 
 class CostCenterEditView(generic.ObjectEditView):
     queryset = models.CostCenter.objects.all()
@@ -91,6 +95,10 @@ class VDIAssignmentListView(generic.ObjectListView):
     ).prefetch_related('virtual_machine__tags')
     table = tables.VDIAssignmentTable
     filterset = filtersets.VDIAssignmentFilterSet
+
+    def get_extra_context(self, request):
+        settings = models.PluginSettings.get_settings()
+        return {'plugin_settings': settings}
 
 
 class VDIAssignmentEditView(generic.ObjectEditView):
@@ -334,6 +342,7 @@ class ChargebackOverviewView(LoginRequiredMixin, View):
         if fmt == 'csv':
             return self._csv_response(assignments)
 
+        settings = models.PluginSettings.get_settings()
         return render(request, self.template_name, {
             'groups': groups,
             'total_monthly': round(total_monthly, 2),
@@ -343,6 +352,7 @@ class ChargebackOverviewView(LoginRequiredMixin, View):
                 cost_center__isnull=False).count(),
             'unassigned_count': models.VDIAssignment.objects.filter(
                 cost_center__isnull=True).count(),
+            'plugin_settings': settings,
         })
 
     def _csv_response(self, assignments):
@@ -415,6 +425,7 @@ class ChargebackPrintView(LoginRequiredMixin, View):
             return self._pdf_response(cost_center, vms, total, hide_prices)
 
         from datetime import date
+        settings = models.PluginSettings.get_settings()
         return render(request, 'netbox_vdi_billing/chargeback_print.html', {
             'cost_center':   cost_center.number,
             'department':    cost_center.department,
@@ -423,6 +434,7 @@ class ChargebackPrintView(LoginRequiredMixin, View):
             'total_yearly':  round(total * 12, 2),
             'month':         date.today().strftime('%B %Y'),
             'hide_prices':   hide_prices,
+            'plugin_settings': settings,
         })
 
     def _pdf_response(self, cost_center, vms, total, hide_prices=False):
@@ -506,3 +518,31 @@ class ChargebackPrintView(LoginRequiredMixin, View):
 
         except ImportError:
             return redirect(f'?format=html')
+
+
+# ─── Plugin Settings ──────────────────────────────────────────────────────────
+
+class PluginSettingsView(LoginRequiredMixin, View):
+    """View zum Bearbeiten von Plugin-Einstellungen."""
+
+    def get_settings(self):
+        return models.PluginSettings.get_settings()
+
+    def get(self, request):
+        settings = self.get_settings()
+        return render(request, 'netbox_vdi_billing/plugin_settings.html', {
+            'settings': settings,
+            'title': 'VDI Billing – Einstellungen'
+        })
+
+    def post(self, request):
+        settings = self.get_settings()
+
+        # Checkbox-Werte aus Form lesen
+        settings.billing_enabled = request.POST.get('billing_enabled') == 'on'
+        settings.show_gpu_badge = request.POST.get('show_gpu_badge') == 'on'
+        settings.show_email = request.POST.get('show_email') == 'on'
+        settings.save()
+
+        messages.success(request, 'Plugin-Einstellungen gespeichert.')
+        return redirect('plugins:netbox_vdi_billing:plugin_settings')

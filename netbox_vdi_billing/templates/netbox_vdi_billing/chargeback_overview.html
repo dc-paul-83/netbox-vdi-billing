@@ -8,9 +8,16 @@
   <div class="col">
     <h1 class="page-header d-flex justify-content-between align-items-center">
       <span><i class="mdi mdi-currency-eur"></i> VDI Kostenstellen-Übersicht</span>
-      <a href="?format=csv" class="btn btn-sm btn-outline-success">
-        <i class="mdi mdi-file-delimited-outline"></i> CSV Export
-      </a>
+      <div class="d-flex gap-2">
+        {% if plugin_settings.billing_enabled %}
+        <a href="?format=csv" class="btn btn-sm btn-outline-success">
+          <i class="mdi mdi-file-delimited-outline"></i> CSV Export
+        </a>
+        {% endif %}
+        <a href="{% url 'plugins:netbox_vdi_billing:plugin_settings' %}" class="btn btn-sm btn-outline-secondary">
+          <i class="mdi mdi-cog"></i> Einstellungen
+        </a>
+      </div>
     </h1>
   </div>
 </div>
@@ -38,6 +45,7 @@
       </div>
     </div>
   </div>
+  {% if plugin_settings.billing_enabled %}
   <div class="col-md-3">
     <div class="card border-primary">
       <div class="card-body text-center">
@@ -54,6 +62,7 @@
       </div>
     </div>
   </div>
+  {% endif %}
 </div>
 
 {# ── Kostenstellen-Tabelle ── #}
@@ -74,9 +83,11 @@
       <span class="ms-3 text-muted small">{{ group.vm_count }} VM{% if group.vm_count != 1 %}s{% endif %}</span>
     </div>
     <div class="d-flex align-items-center gap-3">
+      {% if plugin_settings.billing_enabled %}
       <span class="fw-bold text-primary">{{ group.total_monthly|floatformat:2 }} €/Monat</span>
       <span class="text-muted small">≈ {{ group.total_yearly|floatformat:2 }} €/Jahr</span>
-      {% if group.cost_center_pk %}
+      {% endif %}
+      {% if group.cost_center_pk and plugin_settings.billing_enabled %}
       <a href="{% url 'plugins:netbox_vdi_billing:chargeback_print' group.cost_center_pk %}"
          target="_blank" class="btn btn-sm btn-outline-secondary" title="Interne Ansicht mit Einzelpreisen">
         <i class="mdi mdi-printer"></i> PDF
@@ -96,9 +107,11 @@
           <th>vCPU</th>
           <th>RAM</th>
           <th>Zugewiesen an</th>
+          {% if plugin_settings.billing_enabled %}
           <th>Preisquelle</th>
           <th class="text-end">€/Monat</th>
           <th class="text-end">€/Jahr</th>
+          {% endif %}
           <th></th>
         </tr>
       </thead>
@@ -109,6 +122,7 @@
           <td>{{ vm.vcpus|default:"—" }}</td>
           <td>{{ vm.memory_gb }} GB</td>
           <td>{{ vm.assigned_to|default:"—" }}</td>
+          {% if plugin_settings.billing_enabled %}
           <td>
             <span class="badge {% if vm.cost_override is not None %}bg-warning text-dark{% else %}bg-light text-dark border{% endif %}">
               {{ vm.pricing_source }}
@@ -120,6 +134,7 @@
           <td class="text-end text-muted">
             {% if vm.cost_monthly > 0 %}{{ vm.cost_monthly|floatformat:2|add:"" }}{% with yearly=vm.cost_monthly %}—{% endwith %}{% endif %}
           </td>
+          {% endif %}
           <td class="text-end">
             <a href="{{ vm.assignment_edit_url }}" class="btn btn-xs btn-outline-secondary">
               <i class="mdi mdi-pencil"></i>
@@ -130,9 +145,13 @@
       </tbody>
       <tfoot class="table-light fw-bold">
         <tr>
+          {% if plugin_settings.billing_enabled %}
           <td colspan="5" class="text-end">Summe</td>
           <td class="text-end text-primary">{{ group.total_monthly|floatformat:2 }} €</td>
           <td class="text-end text-muted">{{ group.total_yearly|floatformat:2 }} €</td>
+          {% else %}
+          <td colspan="4" class="text-end">Summe</td>
+          {% endif %}
           <td></td>
         </tr>
       </tfoot>

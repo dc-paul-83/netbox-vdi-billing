@@ -1,0 +1,106 @@
+{% extends 'base/layout.html' %}
+
+{% block title %}VDI Billing – Einstellungen{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+  <div class="col">
+    <h1 class="page-header">
+      <i class="mdi mdi-cog"></i> VDI Billing – Einstellungen
+    </h1>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">
+        <h5>Features aktivieren/deaktivieren</h5>
+      </div>
+      <div class="card-body">
+        <form method="post" action="">
+          {% csrf_token %}
+
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="billing_enabled" name="billing_enabled"
+                   {% if settings.billing_enabled %}checked{% endif %}>
+            <label class="form-check-label" for="billing_enabled">
+              <strong>Kostenberechnung</strong>
+              <br>
+              <small class="text-muted">
+                Zeigt Kosten/Kalkulationen in Zuordnungen, Übersicht und PDFs.
+                Ohne diese Option werden nur VM-Zuordnungen zu Kostenstellen verwaltet.
+              </small>
+            </label>
+          </div>
+
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="show_gpu_badge" name="show_gpu_badge"
+                   {% if settings.show_gpu_badge %}checked{% endif %}>
+            <label class="form-check-label" for="show_gpu_badge">
+              <strong>GPU-Badge anzeigen</strong>
+              <br>
+              <small class="text-muted">
+                Zeigt ein GPU-Badge in der Zuordnungsliste für VMs mit GPU-Support.
+              </small>
+            </label>
+          </div>
+
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="show_email" name="show_email"
+                   {% if settings.show_email %}checked{% endif %}>
+            <label class="form-check-label" for="show_email">
+              <strong>E-Mail-Adressen anzeigen</strong>
+              <br>
+              <small class="text-muted">
+                Zeigt E-Mail-Spalte in Zuordnungen (falls aus Active Directory synchronisiert).
+              </small>
+            </label>
+          </div>
+
+          <hr class="my-4">
+
+          <button type="submit" class="btn btn-primary">
+            <i class="mdi mdi-content-save"></i> Speichern
+          </button>
+          <a href="{% url 'plugins:netbox_vdi_billing:chargeback_overview' %}" class="btn btn-secondary">
+            <i class="mdi mdi-arrow-left"></i> Zurück
+          </a>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card bg-light">
+      <div class="card-header">
+        <h5><i class="mdi mdi-information"></i> Hinweise</h5>
+      </div>
+      <div class="card-body text-sm">
+        <h6>Kostenberechnung aktivieren</h6>
+        <p>
+          Wenn <strong>deaktiviert</strong>: Das Plugin funktioniert nur als Inventar und Zuordnungs-Tool.
+          Es werden nur VM-Namen und Kostenstellen angezeigt, aber keine Preise.
+        </p>
+
+        <h6 class="mt-3">GPU-Badge</h6>
+        <p>
+          Zeigt an, welche VMs GPU-Support haben. Nützlich für die schnelle Visuellen Überblick in Listen.
+        </p>
+
+        <h6 class="mt-3">E-Mail-Adressen</h6>
+        <p>
+          Diese werden durch den <code>sync_vdi_emails</code> Management-Command aus Active Directory synchronisiert.
+          Ohne Synchronisierung werden keine E-Mails angezeigt.
+        </p>
+
+        <hr class="my-3">
+        <p class="text-muted">
+          <i class="mdi mdi-clock-outline"></i> Zuletzt aktualisiert: {{ settings.last_modified|date:"d.m.Y H:i" }} Uhr
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

@@ -5,6 +5,42 @@ from netbox.models import NetBoxModel
 from virtualization.models import VirtualMachine
 
 
+class PluginSettings(models.Model):
+    """
+    Globale Plugin-Einstellungen für optionale Features.
+    Singleton-Muster: Es existiert nur ein Datensatz.
+    """
+    billing_enabled = models.BooleanField(
+        default=True,
+        verbose_name='Kostenberechnung aktivieren',
+        help_text='Zeigt Kosten/Kalkulationen in Zuordnungen, Übersicht und PDFs.',
+    )
+    show_gpu_badge = models.BooleanField(
+        default=True,
+        verbose_name='GPU-Badge anzeigen',
+        help_text='Zeigt GPU-Status in der Zuordnungsliste.',
+    )
+    show_email = models.BooleanField(
+        default=True,
+        verbose_name='E-Mail-Adressen anzeigen',
+        help_text='Zeigt E-Mail-Spalte in Zuordnungen (falls synchronisiert).',
+    )
+    last_modified = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Plugin-Einstellung'
+        verbose_name_plural = 'Plugin-Einstellungen'
+
+    def __str__(self):
+        return 'VDI Billing Plugin – Einstellungen'
+
+    @classmethod
+    def get_settings(cls):
+        """Gibt die einzige PluginSettings-Instanz zurück oder erzeugt sie."""
+        settings, created = cls.objects.get_or_create(pk=1)
+        return settings
+
+
 class CostCenter(NetBoxModel):
     """
     Kostenstelle — wird mit VDI-Zuordnungen verknüpft.
