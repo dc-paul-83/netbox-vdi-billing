@@ -2,24 +2,24 @@ from netbox.plugins.navigation import PluginMenu, PluginMenuButton, PluginMenuIt
 from netbox.choices import ButtonColorChoices
 
 menu = PluginMenu(
-    label='VDI Abrechnung',
+    label='VDI Billing',
     groups=(
         (
-            'Auswertung',
+            'Reports',
             (
                 PluginMenuItem(
                     link='plugins:netbox_vdi_billing:chargeback_overview',
-                    link_text='Kostenstellen-Übersicht',
+                    link_text='Chargeback Overview',
                     permissions=['netbox_vdi_billing.view_vdiassignment'],
                 ),
                 PluginMenuItem(
                     link='plugins:netbox_vdi_billing:vdiassignment_list',
-                    link_text='Alle Zuordnungen',
+                    link_text='All Assignments',
                     permissions=['netbox_vdi_billing.view_vdiassignment'],
                     buttons=(
                         PluginMenuButton(
                             link='plugins:netbox_vdi_billing:vdiassignment_add',
-                            title='Einzeln zuordnen',
+                            title='Add Assignment',
                             icon_class='mdi mdi-plus-thick',
                             color=ButtonColorChoices.GREEN,
                             permissions=['netbox_vdi_billing.add_vdiassignment'],
@@ -29,23 +29,23 @@ menu = PluginMenu(
             ),
         ),
         (
-            'Konfiguration',
+            'Configuration',
             (
                 PluginMenuItem(
                     link='plugins:netbox_vdi_billing:costcenter_list',
-                    link_text='Kostenstellen',
+                    link_text='Cost Centers',
                     permissions=['netbox_vdi_billing.view_costcenter'],
                     buttons=(
                         PluginMenuButton(
                             link='plugins:netbox_vdi_billing:costcenter_add',
-                            title='Kostenstelle hinzufügen',
+                            title='Add Cost Center',
                             icon_class='mdi mdi-plus-thick',
                             color=ButtonColorChoices.GREEN,
                             permissions=['netbox_vdi_billing.add_costcenter'],
                         ),
                         PluginMenuButton(
                             link='plugins:netbox_vdi_billing:bulk_assign',
-                            title='Massen-Zuweisung',
+                            title='Bulk Assign',
                             icon_class='mdi mdi-checkbox-multiple-marked',
                             color=ButtonColorChoices.BLUE,
                             permissions=['netbox_vdi_billing.add_vdiassignment'],
@@ -54,12 +54,12 @@ menu = PluginMenu(
                 ),
                 PluginMenuItem(
                     link='plugins:netbox_vdi_billing:vdibillingprofile_list',
-                    link_text='Preisprofile',
+                    link_text='Price Profiles',
                     permissions=['netbox_vdi_billing.view_vdibillingprofile'],
                     buttons=(
                         PluginMenuButton(
                             link='plugins:netbox_vdi_billing:vdibillingprofile_add',
-                            title='Profil hinzufügen',
+                            title='Add Profile',
                             icon_class='mdi mdi-plus-thick',
                             color=ButtonColorChoices.GREEN,
                             permissions=['netbox_vdi_billing.add_vdibillingprofile'],
@@ -68,7 +68,7 @@ menu = PluginMenu(
                 ),
                 PluginMenuItem(
                     link='plugins:netbox_vdi_billing:plugin_settings',
-                    link_text='Plugin-Einstellungen',
+                    link_text='Settings',
                     permissions=['netbox_vdi_billing.view_pluginsettings'],
                 ),
             ),

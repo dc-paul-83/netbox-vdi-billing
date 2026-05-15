@@ -7,29 +7,29 @@ from virtualization.models import VirtualMachine
 
 class PluginSettings(models.Model):
     """
-    Globale Plugin-Einstellungen für optionale Features.
-    Singleton-Muster: Es existiert nur ein Datensatz.
+    Global plugin settings for optional features.
+    Singleton pattern: only one record exists.
     """
     billing_enabled = models.BooleanField(
         default=True,
-        verbose_name='Kostenberechnung aktivieren',
-        help_text='Zeigt Kosten/Kalkulationen in Zuordnungen, Übersicht und PDFs.',
+        verbose_name='Enable Billing',
+        help_text='Show cost calculations in assignments, overview, and PDFs.',
     )
     show_gpu_badge = models.BooleanField(
         default=True,
-        verbose_name='GPU-Badge anzeigen',
-        help_text='Zeigt GPU-Status in der Zuordnungsliste.',
+        verbose_name='Show GPU Badge',
+        help_text='Display GPU status badge in assignment list.',
     )
     show_email = models.BooleanField(
         default=True,
-        verbose_name='E-Mail-Adressen anzeigen',
-        help_text='Zeigt E-Mail-Spalte in Zuordnungen (falls synchronisiert).',
+        verbose_name='Show Email Addresses',
+        help_text='Show email column in assignments (if synchronized from AD).',
     )
     last_modified = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = 'Plugin-Einstellung'
-        verbose_name_plural = 'Plugin-Einstellungen'
+        verbose_name = 'Plugin Setting'
+        verbose_name_plural = 'Plugin Settings'
 
     def __str__(self):
         return 'VDI Billing Plugin – Einstellungen'
@@ -43,32 +43,32 @@ class PluginSettings(models.Model):
 
 class CostCenter(NetBoxModel):
     """
-    Kostenstelle — wird mit VDI-Zuordnungen verknüpft.
-    Mehrere VMs können derselben Kostenstelle zugewiesen werden.
+    Cost Center — linked to VDI assignments.
+    Multiple VMs can be assigned to the same cost center.
     """
     number = models.CharField(
         max_length=50,
         unique=True,
-        verbose_name='KST-Nummer',
-        help_text='Eindeutige Kostenstellen-Nummer, z.B. 11554',
+        verbose_name='Cost Center Number',
+        help_text='Unique cost center identifier, e.g., 11554',
     )
     name = models.CharField(
         max_length=200,
         blank=True,
-        verbose_name='Bezeichnung',
-        help_text='Optionaler Name der Kostenstelle',
+        verbose_name='Name',
+        help_text='Optional name/description of the cost center',
     )
     department = models.CharField(
         max_length=200,
         blank=True,
-        verbose_name='Abteilung',
+        verbose_name='Department',
     )
-    description = models.TextField(blank=True, verbose_name='Beschreibung')
+    description = models.TextField(blank=True, verbose_name='Description')
 
     class Meta:
         ordering = ['number']
-        verbose_name = 'Kostenstelle'
-        verbose_name_plural = 'Kostenstellen'
+        verbose_name = 'Cost Center'
+        verbose_name_plural = 'Cost Centers'
 
     def __str__(self):
         if self.name:
@@ -97,38 +97,38 @@ class CostCenter(NetBoxModel):
 
 class VDIBillingProfile(NetBoxModel):
     """
-    Preisprofil für eine VDI-Klasse (z.B. "Standard", "GPU-Workstation", "Persistent").
-    Kosten werden aus VM-Specs (vCPU, RAM, GPU) berechnet.
+    Price profile for a VDI class (e.g., Standard, GPU Workstation, Persistent).
+    Costs are calculated from VM specifications (vCPU, RAM, GPU).
     """
     name = models.CharField(
         max_length=100,
         unique=True,
-        verbose_name='Profilname',
+        verbose_name='Profile Name',
     )
     base_price = models.DecimalField(
         max_digits=10, decimal_places=2, default=Decimal('0.00'),
-        verbose_name='Grundpreis (€/Monat)',
-        help_text='Fixer Grundbetrag unabhängig von den VM-Ressourcen.',
+        verbose_name='Base Price (€/month)',
+        help_text='Fixed monthly amount per VM, independent of resources.',
     )
     vcpu_price = models.DecimalField(
         max_digits=8, decimal_places=2, default=Decimal('0.00'),
-        verbose_name='Preis pro vCPU (€/Monat)',
+        verbose_name='Price per vCPU (€/month)',
     )
     ram_price_per_gb = models.DecimalField(
         max_digits=8, decimal_places=2, default=Decimal('0.00'),
-        verbose_name='Preis pro GB RAM (€/Monat)',
+        verbose_name='Price per GB RAM (€/month)',
     )
     gpu_surcharge = models.DecimalField(
         max_digits=8, decimal_places=2, default=Decimal('0.00'),
-        verbose_name='GPU-Aufschlag (€/Monat)',
-        help_text='Wird addiert wenn das Custom-Field "gpu" der VM gesetzt ist.',
+        verbose_name='GPU Surcharge (€/month)',
+        help_text='Added when VM has VDI-GPU tag or gpu custom field.',
     )
-    description = models.TextField(blank=True, verbose_name='Beschreibung')
+    description = models.TextField(blank=True, verbose_name='Description')
 
     class Meta:
         ordering = ['name']
-        verbose_name = 'VDI-Preisprofil'
-        verbose_name_plural = 'VDI-Preisprofile'
+        verbose_name = 'VDI Billing Profile'
+        verbose_name_plural = 'VDI Billing Profiles'
 
     def __str__(self):
         return self.name
@@ -162,52 +162,52 @@ class VDIBillingProfile(NetBoxModel):
 
 class VDIAssignment(NetBoxModel):
     """
-    Verknüpft eine NetBox-VM mit Abrechnungsinformationen:
-    Kostenstelle, Preisprofil und optionalem Festpreis.
+    Links a NetBox VM to billing information:
+    Cost center, price profile, and optional fixed price.
     """
     virtual_machine = models.OneToOneField(
         to=VirtualMachine,
         on_delete=models.CASCADE,
         related_name='vdi_billing',
-        verbose_name='Virtuelle Maschine',
+        verbose_name='Virtual Machine',
     )
     profile = models.ForeignKey(
         to=VDIBillingProfile,
         on_delete=models.SET_NULL,
         null=True, blank=True,
         related_name='assignments',
-        verbose_name='Preisprofil',
-        help_text='Profil zur automatischen Kostenberechnung aus VM-Specs.',
+        verbose_name='Price Profile',
+        help_text='Profile for automatic cost calculation based on VM specs.',
     )
     cost_center = models.ForeignKey(
         to=CostCenter,
         on_delete=models.SET_NULL,
         null=True, blank=True,
         related_name='assignments',
-        verbose_name='Kostenstelle',
+        verbose_name='Cost Center',
     )
     assigned_to = models.CharField(
         max_length=200, blank=True,
-        verbose_name='Zugewiesen an',
-        help_text='Name des Benutzers oder Teams.',
+        verbose_name='Assigned To',
+        help_text='Name of user or team.',
     )
     email = models.EmailField(
         blank=True,
-        verbose_name='E-Mail',
-        help_text='E-Mail-Adresse des Benutzers (wird aus AD synchronisiert).',
+        verbose_name='Email Address',
+        help_text='User email (synchronized from Active Directory).',
     )
     cost_override = models.DecimalField(
         max_digits=10, decimal_places=2,
         null=True, blank=True,
-        verbose_name='Festpreis (€/Monat)',
-        help_text='Überschreibt die Profilberechnung mit einem festen Monatspreis.',
+        verbose_name='Fixed Price (€/month)',
+        help_text='Overrides profile calculation with a fixed monthly price.',
     )
-    notes = models.TextField(blank=True, verbose_name='Notizen')
+    notes = models.TextField(blank=True, verbose_name='Notes')
 
     class Meta:
         ordering = ['virtual_machine__name']
-        verbose_name = 'VDI-Abrechnungszuordnung'
-        verbose_name_plural = 'VDI-Abrechnungszuordnungen'
+        verbose_name = 'VDI Assignment'
+        verbose_name_plural = 'VDI Assignments'
 
     def __str__(self):
         cc = str(self.cost_center) if self.cost_center else 'Keine Kostenstelle'
@@ -233,7 +233,7 @@ class VDIAssignment(NetBoxModel):
 
     @property
     def cost_monthly(self) -> float:
-        """Monatliche Kosten: Festpreis > Profil > 0."""
+        """Monthly cost: fixed price > profile > 0."""
         if self.cost_override is not None:
             return round(float(self.cost_override), 2)
         if self.profile:
