@@ -5,16 +5,16 @@ from .models import CostCenter, VDIBillingProfile, VDIAssignment
 
 
 class CostCenterTable(NetBoxTable):
-    number = tables.Column(linkify=True, verbose_name='KST-Nummer')
-    name = tables.Column(verbose_name='Bezeichnung')
-    department = tables.Column(verbose_name='Abteilung')
+    number = tables.Column(linkify=True, verbose_name='Cost Center #')
+    name = tables.Column(verbose_name='Name')
+    department = tables.Column(verbose_name='Department')
     vm_count = tables.Column(accessor='assignment_count', verbose_name='VMs', orderable=True)
-    total_monthly = tables.Column(verbose_name='€/Monat', orderable=False)
+    total_monthly = tables.Column(verbose_name='€/Month', orderable=False)
 
     def render_total_monthly(self, value):
         if value:
             return f'{value:,.2f} €'.replace(',', '.')
-        return '0,00 €'
+        return '0.00 €'
 
     class Meta(NetBoxTable.Meta):
         model = CostCenter
@@ -24,11 +24,11 @@ class CostCenterTable(NetBoxTable):
 
 class VDIBillingProfileTable(NetBoxTable):
     name = tables.Column(linkify=True)
-    base_price = tables.Column(verbose_name='Grundpreis')
+    base_price = tables.Column(verbose_name='Base Price')
     vcpu_price = tables.Column(verbose_name='€/vCPU')
     ram_price_per_gb = tables.Column(verbose_name='€/GB RAM')
-    gpu_surcharge = tables.Column(verbose_name='GPU-Aufschlag')
-    assignment_count = tables.Column(verbose_name='Zuordnungen', orderable=False)
+    gpu_surcharge = tables.Column(verbose_name='GPU Surcharge')
+    assignment_count = tables.Column(verbose_name='Assignments', orderable=False)
 
     class Meta(NetBoxTable.Meta):
         model = VDIBillingProfile
@@ -40,13 +40,13 @@ class VDIBillingProfileTable(NetBoxTable):
 
 class VDIAssignmentTable(NetBoxTable):
     virtual_machine = tables.Column(linkify=True, verbose_name='VM')
-    cost_center = tables.Column(linkify=True, verbose_name='Kostenstelle')
-    profile = tables.Column(linkify=True, verbose_name='Profil')
-    assigned_to = tables.Column(verbose_name='Zugewiesen an')
-    email = tables.Column(verbose_name='E-Mail')
+    cost_center = tables.Column(linkify=True, verbose_name='Cost Center')
+    profile = tables.Column(linkify=True, verbose_name='Profile')
+    assigned_to = tables.Column(verbose_name='Assigned To')
+    email = tables.Column(verbose_name='Email')
     gpu = tables.Column(verbose_name='GPU', orderable=False, empty_values=())
-    cost_monthly = tables.Column(verbose_name='€/Monat', orderable=False)
-    pricing_source = tables.Column(verbose_name='Preisquelle', orderable=False)
+    cost_monthly = tables.Column(verbose_name='€/Month', orderable=False)
+    pricing_source = tables.Column(verbose_name='Pricing Source', orderable=False)
 
     def render_gpu(self, record):
         has_gpu = record.virtual_machine.tags.filter(name='VDI-GPU').exists()
