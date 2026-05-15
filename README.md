@@ -10,13 +10,14 @@ A [NetBox](https://github.com/netbox-community/netbox) plugin for VDI chargeback
 ## Features
 
 - **Cost Centers** — Manage cost centers and assign multiple VMs at once via bulk assignment UI
-- **Price Profiles** — Define monthly costs per vCPU, RAM (GB) and GPU surcharge
-- **VDI Assignments** — Link VMs to cost centers and profiles; supports fixed-price override; GPU badge visible in list view
-- **Chargeback Overview** — Monthly/yearly cost summary grouped by cost center, exportable as PDF or CSV
-- **Customer PDF** — Second PDF export per cost center with individual prices hidden, only totals visible
+- **Price Profiles** — Define monthly costs per vCPU, RAM (GB) and GPU surcharge; supports fixed-price overrides per VM
+- **VDI Assignments** — Link VMs to cost centers and profiles; GPU badge visible in assignment list
+- **Chargeback Overview** — Monthly/yearly cost summary grouped by cost center with KPI cards; exportable as PDF or CSV
+- **Customer PDF** — Separate PDF export per cost center with per-VM prices hidden (totals only) for billing
+- **Optional Billing** — Disable billing to use the plugin as pure inventory/assignment tool (via Plugin Settings)
 - **Horizon Sync** — Automatically tag persistent (`VDI-Persistent`) and GPU (`VDI-GPU`) VMs via Omnissa Horizon REST API
-- **AD E-Mail Sync** — Read assigned users from Horizon and look up their e-mail in Active Directory (LDAP)
-- **VM Panel** — Billing info panel on every Virtual Machine detail page
+- **AD E-Mail Sync** — Read assigned users from Horizon and look up their e-mail addresses in Active Directory (LDAP)
+- **VM Panel** — Billing info panel on every Virtual Machine detail page showing cost center, user, e-mail, and costs
 
 ---
 
@@ -55,14 +56,14 @@ Price Profile  +  VDI Assignment  =  Cost Center Chargeback
 sudo /opt/netbox/venv/bin/pip install \
   https://github.com/dc-paul-83/netbox-vdi-billing/archive/refs/heads/main.tar.gz
 
-# 2. Add to configuration.py
+# 2. Add to /opt/netbox/netbox/netbox/configuration.py
 PLUGINS = ['netbox_vdi_billing']
 
 # 3. Run migrations
-python manage.py migrate netbox_vdi_billing
+/opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py migrate netbox_vdi_billing
 
 # 4. Collect static files
-python manage.py collectstatic --no-input
+/opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py collectstatic --no-input
 
 # 5. Restart
 sudo systemctl restart netbox netbox-rq
@@ -74,7 +75,10 @@ sudo systemctl restart netbox netbox-rq
 sudo /opt/netbox/venv/bin/pip install --upgrade --force-reinstall --no-cache-dir \
   https://github.com/dc-paul-83/netbox-vdi-billing/archive/refs/heads/main.tar.gz
 
-python manage.py migrate netbox_vdi_billing
+/opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py migrate netbox_vdi_billing
+
+/opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py collectstatic --no-input
+
 sudo systemctl restart netbox netbox-rq
 ```
 
@@ -82,41 +86,42 @@ sudo systemctl restart netbox netbox-rq
 
 ## Configuration
 
-All settings go into `configuration.py` under `PLUGINS_CONFIG`:
+All settings go into `/opt/netbox/netbox/netbox/configuration.py` under `PLUGINS_CONFIG`:
 
 ```python
 PLUGINS_CONFIG = {
     'netbox_vdi_billing': {
 
         # ── Horizon Instances ─────────────────────────────────────────────────
-        # List of Omnissa Horizon Connection Servers
-        # Use internal IPs directly — not the UAG (Unified Access Gateway)!
+        # List of Omnissa Horizon Connection Servers for automatic VM tagging
+        # Use internal Connection Server IPs directly — NOT the UAG (Unified Access Gateway)!
         'horizon_instances': [
             {
-                'host':     '192.168.1.100',  # internal Connection Server IP
-                'domain':   'YOURDOMAIN',
-                'username': 'svc-netbox',
-                'password': 'secret',
+                'host':     '192.168.1.100',      # Replace: internal Connection Server IP
+                'domain':   'YOURDOMAIN',         # Replace: your Active Directory domain
+                'username': 'svc-netbox',         # Replace: service account username
+                'password': 'secret',             # Replace: service account password
             },
             # Add more instances for multi-site setups
         ],
 
         # ── Tags ──────────────────────────────────────────────────────────────
-        'persistent_tag':   'VDI-Persistent',        # tag for dedicated desktops
-        'gpu_tag':          'VDI-GPU',               # tag for GPU desktops
-        'gpu_pool_pattern': r'nvidia|vgpu|gpu|grid', # regex matched against pool name
+        'persistent_tag':   'VDI-Persistent',        # Tag for dedicated/persistent desktops
+        'gpu_tag':          'VDI-GPU',               # Tag for GPU-enabled desktops
+        'gpu_pool_pattern': r'nvidia|vgpu|gpu|grid', # Regex to detect GPU pools by name
 
         # ── LDAP / Active Directory (for e-mail sync) ─────────────────────────
-        # Only needed if NetBox is NOT configured with LDAP authentication.
+        # Only needed if NetBox is NOT already configured with LDAP authentication.
         # The plugin automatically detects LDAP settings in this order:
-        #   1. AUTH_LDAP_* from Django settings (ldap_config.py / configuration.py)
-        #   2. The settings below (plugin config)
-        #   3. /opt/netbox/netbox/netbox/ldap_config.py read directly
+        #   1. AUTH_LDAP_* from Django settings (if ldap_config.py exists)
+        #   2. The settings below (plugin-specific config)
+        #   3. /opt/netbox/netbox/netbox/ldap_config.py read directly (fallback)
         #
-        # 'ldap_server':        'ldap://dc.example.com',
-        # 'ldap_bind_dn':       'CN=svc-netbox,OU=...,DC=example,DC=com',
-        # 'ldap_bind_password': 'secret',
-        # 'ldap_search_base':   'DC=example,DC=com',
+        # Uncomment and configure ONLY if you're NOT using ldap_config.py:
+        # 'ldap_server':        'ldap://dc.example.com',                # Replace: your LDAP server
+        # 'ldap_bind_dn':       'CN=svc-netbox,OU=Services,DC=example,DC=com',  # Replace: bind user DN
+        # 'ldap_bind_password': 'secret',                               # Replace: bind password
+        # 'ldap_search_base':   'DC=example,DC=com',                    # Replace: search base DN
     }
 }
 ```
@@ -124,6 +129,8 @@ PLUGINS_CONFIG = {
 ---
 
 ## Management Commands
+
+> **Note**: Replace `python manage.py` with `/opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py` when running on the server.
 
 ### `sync_horizon_tags`
 
@@ -135,16 +142,16 @@ Queries Horizon and sets/removes `VDI-Persistent` and `VDI-GPU` tags on NetBox V
 
 ```bash
 # Dry-run first
-python manage.py sync_horizon_tags --dry-run
+/opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py sync_horizon_tags --dry-run
 
 # Real run
-python manage.py sync_horizon_tags
+/opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py sync_horizon_tags
 
 # Disable GPU detection
-python manage.py sync_horizon_tags --no-gpu
+/opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py sync_horizon_tags --no-gpu
 
 # Override tag names
-python manage.py sync_horizon_tags --tag "VDI-Persistent" --gpu-tag "VDI-GPU"
+/opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py sync_horizon_tags --tag "VDI-Persistent" --gpu-tag "VDI-GPU"
 ```
 
 ---
@@ -155,7 +162,7 @@ Creates/updates `VDIAssignment` entries for VMs matching a filter.
 
 ```bash
 # Assign all VMs with role "VDI" to profile "Standard VDI"
-python manage.py auto_assign_vdi \
+/opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py auto_assign_vdi \
     --profile "Standard VDI" \
     --cost-center-field tenant \
     --filter-role VDI \
@@ -163,7 +170,7 @@ python manage.py auto_assign_vdi \
     --dry-run
 
 # CSV import (columns: vm_name;cost_center;department;profile)
-python manage.py auto_assign_vdi --csv /tmp/assignments.csv
+/opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py auto_assign_vdi --csv /tmp/assignments.csv
 ```
 
 **Options:**
@@ -192,25 +199,25 @@ Reads the assigned user for each VDI desktop from Horizon, looks up their e-mail
 
 ```bash
 # Dry-run
-python manage.py sync_vdi_emails --dry-run
+/opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py sync_vdi_emails --dry-run
 
 # Real run
-python manage.py sync_vdi_emails
+/opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py sync_vdi_emails
 
 # Also fill assigned_to with AD display name if empty
-python manage.py sync_vdi_emails --update-assigned-to
+/opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py sync_vdi_emails --update-assigned-to
 
 # Overwrite existing e-mail addresses
-python manage.py sync_vdi_emails --overwrite
+/opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py sync_vdi_emails --overwrite
 
 # Skip Horizon, use assigned_to field as username instead
-python manage.py sync_vdi_emails --no-horizon
+/opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py sync_vdi_emails --no-horizon
 
 # Only process VMs matching a regex
-python manage.py sync_vdi_emails --filter-name "^site-vdi-.*"
+/opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py sync_vdi_emails --filter-name "^site-vdi-.*"
 
 # Debug: show raw Horizon API fields
-python manage.py sync_vdi_emails --dry-run --debug-horizon
+/opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py sync_vdi_emails --dry-run --debug-horizon
 ```
 
 **LDAP auto-detection order:**
@@ -251,30 +258,30 @@ sudo mkdir -p /var/log/netbox
 
 ### PDF Export
 
-Each cost center row in the Chargeback Overview offers two PDF buttons:
+When **billing is enabled**, each cost center row in the Chargeback Overview offers two PDF buttons:
 
 | Button | Description |
 |---|---|
 | 🖨 **PDF** | Full internal view — all per-VM prices visible |
-| 👁 **Kunden-PDF** | Customer view — per-VM prices hidden, only monthly/yearly totals shown |
+| 👁 **Customer PDF** | Customer view — per-VM prices hidden, only monthly/yearly totals shown |
 
 Both PDFs can also be downloaded directly via `?format=pdf` and `?format=pdf&hide_prices=1`.
 
-The plugin also adds a **VDI Billing** panel to every Virtual Machine detail page showing cost center, assigned user, e-mail, price profile and monthly/yearly costs.
+The plugin also adds a **VDI Billing** panel to every Virtual Machine detail page (when billing enabled) showing cost center, assigned user, e-mail, price profile and monthly/yearly costs.
 
 ---
 
 ## Plugin Settings
 
-Access plugin settings at **VDI Abrechnung → Konfiguration → Plugin-Einstellungen** or directly at `/plugins/vdi-billing/settings/`.
+Access plugin settings at **VDI Abrechnung** → **Konfiguration** → **Plugin-Einstellungen** in the menu, or directly at `/plugins/vdi-billing/settings/`.
 
 ### Available Options
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| **Kostenberechnung aktivieren** | ✅ ON | Show cost calculations in overview, assignments, and PDFs. When disabled, the plugin functions as a pure inventory/assignment tool without billing. |
-| **GPU-Badge anzeigen** | ✅ ON | Display GPU status badge in assignment list (visual indicator for VMs with GPU support). |
-| **E-Mail-Adressen anzeigen** | ✅ ON | Show email column in assignments (requires sync via `sync_vdi_emails` command). |
+| **Kostenberechnung aktivieren** (Enable Billing) | ✅ ON | Show cost calculations in overview, assignments, and PDFs. When disabled, the plugin functions as a pure inventory/assignment tool without any billing features. |
+| **GPU-Badge anzeigen** (Show GPU Badge) | ✅ ON | Display GPU status badge in assignment list (visual indicator for VMs with GPU support). |
+| **E-Mail-Adressen anzeigen** (Show E-Mails) | ✅ ON | Show email column in assignments (requires prior sync via `sync_vdi_emails` command). |
 
 ### Use Cases
 
