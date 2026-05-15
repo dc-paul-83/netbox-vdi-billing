@@ -1,4 +1,5 @@
 import django_tables2 as tables
+from django.utils.html import format_html
 from netbox.tables import NetBoxTable, columns
 from .models import CostCenter, VDIBillingProfile, VDIAssignment
 
@@ -43,8 +44,21 @@ class VDIAssignmentTable(NetBoxTable):
     profile = tables.Column(linkify=True, verbose_name='Profil')
     assigned_to = tables.Column(verbose_name='Zugewiesen an')
     email = tables.Column(verbose_name='E-Mail')
+    gpu = tables.Column(verbose_name='GPU', orderable=False, empty_values=())
     cost_monthly = tables.Column(verbose_name='€/Monat', orderable=False)
     pricing_source = tables.Column(verbose_name='Preisquelle', orderable=False)
+
+    def render_gpu(self, record):
+        has_gpu = record.virtual_machine.tags.filter(name='VDI-GPU').exists()
+        if not has_gpu:
+            has_gpu = bool(record.virtual_machine.custom_field_data.get('gpu'))
+        if has_gpu:
+            return format_html(
+                '<span class="badge bg-warning text-dark">'
+                '<i class="mdi mdi-gpu"></i> GPU'
+                '</span>'
+            )
+        return '—'
 
     def render_cost_monthly(self, value):
         if value:
@@ -53,7 +67,7 @@ class VDIAssignmentTable(NetBoxTable):
 
     class Meta(NetBoxTable.Meta):
         model = VDIAssignment
-        fields = ('pk', 'virtual_machine', 'cost_center', 'profile',
+        fields = ('pk', 'virtual_machine', 'gpu', 'cost_center', 'profile',
                   'assigned_to', 'email', 'cost_monthly', 'pricing_source', 'actions')
-        default_columns = ('virtual_machine', 'cost_center',
+        default_columns = ('virtual_machine', 'gpu', 'cost_center',
                            'assigned_to', 'email', 'cost_monthly', 'pricing_source')

@@ -86,7 +86,9 @@ class VDIAssignmentView(generic.ObjectView):
 
 
 class VDIAssignmentListView(generic.ObjectListView):
-    queryset = models.VDIAssignment.objects.select_related('virtual_machine', 'profile', 'cost_center')
+    queryset = models.VDIAssignment.objects.select_related(
+        'virtual_machine', 'profile', 'cost_center'
+    ).prefetch_related('virtual_machine__tags')
     table = tables.VDIAssignmentTable
     filterset = filtersets.VDIAssignmentFilterSet
 
